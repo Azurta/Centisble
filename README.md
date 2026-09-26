@@ -35,7 +35,19 @@ Without Plaid keys you can still click **Try with demo data**, import CSVs, and 
 
 ### Importing your Google Sheets
 
-In Sheets choose **File → Download → CSV**, then use **Accounts → Import**. Date, description, amount, and category columns are detected automatically. Category names such as "buying food" or "going out" are mapped for you. Bank CSV exports work too. Import one file per account and set the account type (credit card vs. checking) so card payments can be matched.
+In Sheets choose **File → Download → Microsoft Excel (.xlsx)**, then go to **Accounts → Import your monthly budget sheets**. You can pick several months at once. The importer understands the monthly budget layout:
+- an **Income** block (label in column A, amount in column B)
+- an expense table with **Date · Item · Quantity · Price · Category · Payment · Notes · Total** columns
+- per-category tabs (Food, Takeout, ALC…) where the tab title is the category
+- the **Category · Actual · Goal** summary table, whose goals become your starting budgets
+
+Rows in the **Debt** category that name a card (e.g. "Capital one pay", "Discover Debt", "Chase Debt") are treated as credit card payments and not counted as spending again. Tuition, loans, and medical bills in Debt still count. A row without a date takes the date of the row above it. Re-importing a month replaces that month.
+
+Bank CSV exports work too (**Import a bank CSV**). Import one file per account and set the account type (credit card vs. checking) so card payments can be matched.
+
+## Online version (no install)
+
+`npm run build:online` builds one self-contained `dist-online/index.html` that runs entirely in the browser. It supports sheet, CSV, and manual imports but has no bank sync. `node scripts/artifact-page.mjs` turns that file into page content for hosts that add their own `<html>` skeleton.
 
 ## Data & privacy
 
@@ -54,6 +66,7 @@ npm run build && npm start   # production build served by the API server
 Code map:
 - `src/lib/classify.ts` — decides what is spending, a transfer, income, savings, a refund, or interest, and assigns categories
 - `src/lib/analytics.ts` — monthly totals, suggested budgets, savings tips, recurring charges, Money Score
-- `src/lib/csv.ts` — spreadsheet and bank CSV import
+- `src/lib/budgetSheet.ts` — monthly budget .xlsx import
+- `src/lib/csv.ts` — bank CSV import
 - `src/lib/lessons.ts` — lesson content
 - `server/` — Express + Plaid `/transactions/sync`, webhook, and live updates (server-sent events)

@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { api } from "../api";
+import { parseBudgetWorkbook, readXlsx, type SheetImport } from "../lib/budgetSheet";
 import { guessMapping, looksNegative, parseCsv, rowsToTransactions, type CsvMapping } from "../lib/csv";
 import { saveJson } from "../lib/storage";
 import type { AccountType } from "../lib/types";
-import type { AppData } from "../useAppData";
+import { usd, monthLabel } from "../format";
+import { STATIC, type AppData } from "../useAppData";
 
 export function Accounts({ data }: { data: AppData }) {
   return (
     <div className="grid">
-      <ConnectBank data={data} />
+      <ImportSheets data={data} />
+      {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
       <ImportCsv data={data} />
       <section className="card">
         <h2>Your accounts</h2>
@@ -148,10 +151,10 @@ function ImportCsv({ data }: { data: AppData }) {
 
   return (
     <section className="card">
-      <h2>Import from Google Sheets or a bank CSV</h2>
+      <h2>Import a bank CSV</h2>
       <p className="muted small">
-        In Google Sheets: <em>File → Download → Comma-separated values (.csv)</em>. Import one file per account (e.g. one for your checking,
-        one for each credit card) so card payments can be matched.
+        Most banks let you download transactions as CSV. Import one file per account (checking, each credit card) and pick the account
+        type so card payments can be matched.
       </p>
       <input type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} aria-label="CSV file" />
       {parsed && (
@@ -185,6 +188,91 @@ function ImportCsv({ data }: { data: AppData }) {
         </div>
       )}
       {msg && <p className="small good">{msg}</p>}
+    </section>
+  );
+}
+
+function OnlineNote() {
+  return (
+    <section className="card">
+      <h2>Automatic bank sync</h2>
+      <p className="muted small">
+        This online version works with your spreadsheets, bank CSVs and purchases you add by hand. Everything you import stays in this
+        browser on this device.
+      </p>
+      <p className="muted small">
+        Linking your bank so purchases show up on their own needs the full version running on a computer with free Plaid keys — see the
+        README in the project.
+      </p>
+    </section>
+  );
+}
+
+function ImportSheets({ data }: { data: AppData }) {
+  const [results, setResults] = useState<SheetImport[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const onFiles = async (files: FileList) => {
+    setBusy(true);
+    setMsg(null);
+    const out: SheetImport[] = [];
+    for (const f of Array.from(files)) {
+      try {
+        out.push(parseBudgetWorkbook(f.name, await readXlsx(f)));
+      } catch (e) {
+        setMsg(`Couldn't read ${f.name}: ${(e as Error).message}`);
+      }
+    }
+    setResults(out.sort((a, b) => a.month.localeCompare(b.month)));
+    setBusy(false);
+  };
+
+  return (
+    <section className="card wide">
+      <h2>Import your monthly budget sheets (.xlsx)</h2>
+      <p className="muted small">
+        In Google Sheets choose <em>File → Download → Microsoft Excel (.xlsx)</em>, then pick one or more months here. The app reads your
+        income, every item, its category and what you paid with. Rows like “Capital one pay” or “Discover Debt” are recognised as credit
+        card payments and <strong>not</strong> counted again. Re-importing a month replaces it.
+      </p>
+      <input type="file" multiple accept=".xlsx" onChange={(e) => e.target.files?.length && onFiles(e.target.files)} aria-label="Budget spreadsheets" />
+      {busy && <p className="small">Reading…</p>}
+      {!!results.length && (
+        <>
+          <div className="table-wrap">
+            <table className="tx sheet-preview">
+              <thead>
+                <tr><th>Month</th><th className="num">Income</th><th className="num">Your sheet's expenses</th><th className="num">Card payments (not spending)</th><th className="num">Saved</th><th className="num">Real spending</th></tr>
+              </thead>
+              <tbody>
+                {results.map((r) => (
+                  <tr key={r.fileName}>
+                    <td>{monthLabel(r.month)}<div className="muted small">{r.transactions.length} rows · {r.fileName}</div></td>
+                    <td className="num">{usd(r.income, true)}</td>
+                    <td className="num">{usd(r.expenses + r.cardPayments + r.saved, true)}</td>
+                    <td className="num">{usd(r.cardPayments, true)}</td>
+                    <td className="num">{usd(r.saved, true)}</td>
+                    <td className="num"><strong>{usd(r.expenses, true)}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row">
+            <button className="btn" onClick={() => {
+              data.importSheetMonths(results);
+              // Use the latest sheet's goals as budgets, unless budgets are already set up.
+              const goals = results[results.length - 1].goals;
+              if (!Object.keys(data.budgets).length && Object.keys(goals).length) data.setBudgets(goals);
+              setMsg(`Imported ${results.length} month${results.length > 1 ? "s" : ""}. Check the Overview and pick a month at the top.`);
+              setResults([]);
+            }}>Import {results.length} month{results.length > 1 ? "s" : ""}</button>
+            <button className="btn secondary" onClick={() => setResults([])}>Cancel</button>
+          </div>
+        </>
+      )}
+      {msg && <p className="small">{msg}</p>}
     </section>
   );
 }

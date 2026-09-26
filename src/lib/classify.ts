@@ -180,13 +180,26 @@ export function classifyAll(
     if (manualCat === "income") return result("income", "Set by you");
     if (manualCat === "savings") return result("savings", "Set by you");
 
-    // 2. Interest & fees are real costs — the only time a credit card "costs extra".
+    // 2. Budget-sheet rows were already sorted by the importer.
+    if (t.sheetKind) {
+      const why: Record<TxKind, string> = {
+        transfer: "Credit card payment — the purchases are already listed in your sheet",
+        savings: "Moved to savings",
+        income: "Income",
+        expense: "Purchase",
+        interest: "Interest / fee",
+        refund: "Refund",
+      };
+      return result(t.sheetKind, why[t.sheetKind]);
+    }
+
+    // 3. Interest & fees are real costs — the only time a credit card "costs extra".
     if (t.amount > 0 && (INTEREST.test(text) || bd === "BANK_FEES_INTEREST_CHARGE"))
       return result("interest", "Interest charge — this is money lost, not spent on anything");
     if (t.amount > 0 && (FEES.test(text) || bp === "BANK_FEES"))
       return result("interest", "Bank / card fee");
 
-    // 3. Matched transfer between two of your accounts.
+    // 4. Matched transfer between two of your accounts.
     const partnerId = pairs.get(t.id);
     if (partnerId) {
       const partner = byId.get(partnerId)!;
@@ -202,7 +215,7 @@ export function classifyAll(
       return result("transfer", "Moved between your own accounts");
     }
 
-    // 4. Unpaired transfer signals.
+    // 5. Unpaired transfer signals.
     const looksLikeCardPayment = CARD_PAYMENT.test(text) || bd === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT";
     if (type === "credit" && t.amount < 0 && (looksLikeCardPayment || bp === "TRANSFER_IN" || imported === "transfer"))
       return result("transfer", "Credit card payment received — not income");
@@ -218,17 +231,17 @@ export function classifyAll(
     if (bp === "TRANSFER_IN" || bp === "TRANSFER_OUT" || GENERIC_TRANSFER.test(text) || imported === "transfer")
       return result("transfer", "Transfer between accounts");
 
-    // 5. Loans.
+    // 6. Loans.
     if (type === "loan") return t.amount > 0 ? result("interest", "Loan interest") : result("transfer", "Loan payment received");
 
-    // 6. Money in.
+    // 7. Money in.
     if (t.amount < 0) {
       if (REFUND.test(text) || type === "credit") return result("refund", "Refund / credit back");
       if (imported === "income" || bp === "INCOME" || INCOME.test(text)) return result("income", "Income");
       return result("income", "Money received");
     }
 
-    // 7. Everything else is a real purchase.
+    // 8. Everything else is a real purchase.
     if (imported === "income") return result("income", "Marked as income in your sheet");
     return result("expense", "Purchase");
   });

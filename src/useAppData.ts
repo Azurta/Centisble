@@ -5,6 +5,9 @@ import { demoData } from "./lib/demo";
 import { loadJson, saveJson } from "./lib/storage";
 import type { Account, Budgets, CategoryId, Overrides, Transaction, TxKind } from "./lib/types";
 
+/** Hosted build without the sync server: spreadsheets, CSVs and manual entries only. */
+export const STATIC = Boolean(import.meta.env.VITE_STATIC);
+
 interface LocalData {
   accounts: Account[];
   transactions: Transaction[];
@@ -29,6 +32,7 @@ export function useAppData() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
+    if (STATIC) return;
     try {
       const [s, data] = await Promise.all([api.status(), api.transactions()]);
       setStatus(s);
@@ -42,6 +46,7 @@ export function useAppData() {
 
   // Live updates pushed from the server whenever the bank reports a new purchase.
   useEffect(() => {
+    if (STATIC) return;
     refresh();
     let es: EventSource | undefined;
     try {
@@ -102,6 +107,19 @@ export function useAppData() {
       };
     });
 
+  /** Re-importing a month's sheet replaces that month's rows, so edits in the sheet carry over. */
+  const importSheetMonths = (months: { month: string; transactions: Transaction[] }[]) =>
+    setLocal((l) => {
+      const prefixes = months.map((m) => `sheet-${m.month}-`);
+      const account: Account = { id: "sheet-budget", name: "Budget spreadsheets", type: "cash", source: "import" };
+      return {
+        accounts: l.accounts.filter((a) => a.id !== account.id).concat(account),
+        transactions: l.transactions
+          .filter((t) => !prefixes.some((p) => t.id.startsWith(p)))
+          .concat(months.flatMap((m) => m.transactions)),
+      };
+    });
+
   const removeAccount = (id: string) =>
     setLocal((l) => ({ accounts: l.accounts.filter((a) => a.id !== id), transactions: l.transactions.filter((t) => t.accountId !== id) }));
 
@@ -123,7 +141,7 @@ export function useAppData() {
   return {
     accounts, classified, overrides, budgets, setBudgets, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
-    setCategory, setKind, importTransactions, removeAccount, loadDemo, clearDemo, addManual,
+    setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,
     hasDemo: local.accounts.some((a) => a.source === "demo"),
   };
 }

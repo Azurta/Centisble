@@ -25,7 +25,7 @@ export function Overview({ summary: s, history, score, tips, goTo }: Props) {
           label="Left over"
           value={usd(s.income - s.spending)}
           tone={s.income - s.spending < 0 ? "bad" : "good"}
-          hint={s.income ? `${pct(Math.max(0, s.savingsRate))} of income kept` : undefined}
+          hint={s.income ? `${pct(Math.max(0, s.savingsRate))} of income kept${s.saved > 0 ? ` (${usd(s.saved)} moved to savings)` : ""}` : undefined}
         />
         <Stat label="Interest & fees" value={usd(s.interestPaid, true)} tone={s.interestPaid > 0 ? "bad" : "good"} hint={s.interestPaid > 0 ? "Money lost to the bank" : "Nice — none"} />
       </section>

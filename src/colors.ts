@@ -17,21 +17,32 @@ export const CATEGORY_SLOT: Partial<Record<CategoryId, number>> = {
   shopping: 3,
   alcohol: 4,
   car: 5,
-  subscriptions: 6,
+  entertainment: 6,
   debt: 7,
 };
 
 export const hasOwnColor = (id: CategoryId) => CATEGORY_SLOT[id] != null;
 
+/** Dark when the page's theme toggle says so, or when there's no toggle and the OS is dark. */
 export function useDark() {
-  const q = typeof window !== "undefined" ? window.matchMedia?.("(prefers-color-scheme: dark)") : undefined;
-  const [dark, setDark] = useState(Boolean(q?.matches));
+  const read = () => {
+    if (typeof window === "undefined") return false;
+    const forced = document.documentElement.dataset.theme;
+    if (forced === "dark" || forced === "light") return forced === "dark";
+    return Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+  };
+  const [dark, setDark] = useState(read);
   useEffect(() => {
-    if (!q) return;
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
-  }, [q]);
+    const update = () => setDark(read());
+    const q = window.matchMedia?.("(prefers-color-scheme: dark)");
+    q?.addEventListener("change", update);
+    const mo = new MutationObserver(update);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      q?.removeEventListener("change", update);
+      mo.disconnect();
+    };
+  }, []);
   return dark;
 }
 

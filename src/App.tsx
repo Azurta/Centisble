@@ -95,7 +95,7 @@ function Welcome({ onDemo, onConnect }: { onDemo: () => void; onConnect: () => v
         payments aren't counted twice, only interest is.
       </p>
       <div className="row">
-        <button className="btn" onClick={onConnect}>Connect accounts or import a sheet</button>
+        <button className="btn" onClick={onConnect}>Import my budget sheets</button>
         <button className="btn secondary" onClick={onDemo}>Try with demo data</button>
       </div>
     </section>

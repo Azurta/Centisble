@@ -11,10 +11,12 @@
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "build:online": "VITE_STATIC=1 vite build --mode online"
   },
   "dependencies": {
     "dotenv": "^18.0.4",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "papaparse": "^5.7.0",
     "plaid": "^47.0.0",
@@ -34,6 +36,7 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^5.0.2"
   }
 }

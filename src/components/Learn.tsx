@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { LESSONS, youtubeId, youtubeSearchUrl, type Lesson } from "../lib/lessons";
-import type { AppData } from "../useAppData";
+import { STATIC, type AppData } from "../useAppData";
 
 export function Learn({ data, focus }: { data: AppData; focus?: string }) {
   const done = new Set(data.lessonsDone);
@@ -69,7 +69,7 @@ function MyVideos({ data }: { data: AppData }) {
   return (
     <section className="card">
       <h2>Your saved videos</h2>
-      <p className="muted small">Found a video that helped? Paste the YouTube link to keep it here and watch it inside the app.</p>
+      <p className="muted small">Found a video that helped? Paste the YouTube link to keep it here.</p>
       <form
         className="filters"
         onSubmit={(e) => {
@@ -87,6 +87,9 @@ function MyVideos({ data }: { data: AppData }) {
       <div className="videos">
         {data.videos.map((v, i) => (
           <figure key={v.url + i}>
+            {STATIC ? (
+              <a className="btn secondary" href={v.url} target="_blank" rel="noreferrer">▶ Watch on YouTube</a>
+            ) : (
             <div className="video">
               <iframe
                 src={`https://www.youtube-nocookie.com/embed/${youtubeId(v.url)}`}
@@ -96,6 +99,7 @@ function MyVideos({ data }: { data: AppData }) {
                 allowFullScreen
               />
             </div>
+            )}
             <figcaption>
               {v.title} <button className="link small" onClick={() => data.setVideos((vs) => vs.filter((_, j) => j !== i))}>Remove</button>
             </figcaption>

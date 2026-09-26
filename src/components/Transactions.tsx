@@ -68,7 +68,7 @@ function Row({ t, data, remember, account }: { t: ClassifiedTransaction; data: A
       <td>
         <div className="desc">{t.merchant || t.description}{t.pending && <span className="pill">pending</span>}</div>
         <div className="muted small">
-          <span className="mobile-date">{t.date.slice(5).replace("-", "/")} · </span>{account} · <span className={`kind ${t.kind}`} title={t.reason}>{KIND_LABEL[t.kind]}</span>
+          <span className="mobile-date">{t.date.slice(5).replace("-", "/")} · </span>{t.paidWith ?? account} · <span className={`kind ${t.kind}`} title={t.reason}>{KIND_LABEL[t.kind]}</span>
           {t.reason && <span className="reason"> — {t.reason}</span>}
         </div>
       </td>

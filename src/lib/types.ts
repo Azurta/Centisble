@@ -32,6 +32,10 @@ export interface Transaction {
   bankCategory?: { primary?: string; detailed?: string };
   /** Category label from an imported spreadsheet, if any. */
   importedCategory?: string;
+  /** How a budget-sheet row was classified at import (sheets already say what each row is). */
+  sheetKind?: TxKind;
+  /** Card / cash / account the purchase was paid with, as written in a budget sheet. */
+  paidWith?: string;
 }
 
 export interface ClassifiedTransaction extends Transaction {
@@ -47,6 +51,7 @@ export type CategoryId =
   | "rent"
   | "car"
   | "going_out"
+  | "entertainment"
   | "groceries"
   | "alcohol"
   | "shopping"

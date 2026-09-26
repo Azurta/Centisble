@@ -238,6 +238,7 @@ table.tx { width: 100%; border-collapse: collapse; }
   .donut-chart { height: 190px; max-width: 220px; margin: 0 auto; width: 100%; }
   .score { flex-direction: column; align-items: flex-start; }
   .reason { display: none; }
+  .tip { flex-direction: column; gap: 4px; }
   .mobile-date { display: inline; }
   .tx thead { display: none; }
   .tx, .tx tbody { display: block; }
@@ -251,4 +252,13 @@ table.tx { width: 100%; border-collapse: collapse; }
   .tx td:nth-child(3) { grid-area: cat; }
   .tx td:nth-child(4) { grid-area: amt; }
   .tx select { max-width: 60%; }
+}
+
+/* Sheet import preview keeps its table layout on phones (it scrolls sideways instead). */
+@media (max-width: 760px) {
+  .tx.sheet-preview { display: table; min-width: 560px; }
+  .tx.sheet-preview thead { display: table-header-group; }
+  .tx.sheet-preview tbody { display: table-row-group; }
+  .tx.sheet-preview tr { display: table-row; }
+  .tx.sheet-preview td { display: table-cell; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 }
