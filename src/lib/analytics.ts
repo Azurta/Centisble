@@ -1,4 +1,4 @@
-import { categoryInfo, SPENDING_CATEGORIES } from "./categories";
+import { categoryInfo, spendingCategories } from "./categories";
 import { merchantKey } from "./classify";
 import type { Budgets, CategoryId, ClassifiedTransaction } from "./types";
 
@@ -82,12 +82,12 @@ export function suggestBudgets(history: MonthSummary[]): Budgets {
   if (!full.length) return {};
   const avgIncome = full.reduce((s, m) => s + m.income, 0) / full.length;
   const avg: Partial<Record<CategoryId, number>> = {};
-  for (const c of SPENDING_CATEGORIES)
+  for (const c of spendingCategories())
     avg[c.id] = full.reduce((s, m) => s + Math.max(0, m.byCategory[c.id] ?? 0), 0) / full.length;
-  const wantsTotal = SPENDING_CATEGORIES.filter((c) => c.bucket === "wants").reduce((s, c) => s + (avg[c.id] ?? 0), 0);
+  const wantsTotal = spendingCategories().filter((c) => c.bucket === "wants").reduce((s, c) => s + (avg[c.id] ?? 0), 0);
   const wantsScale = wantsTotal > avgIncome * 0.3 ? (avgIncome * 0.3) / wantsTotal : 1;
   const out: Budgets = {};
-  for (const c of SPENDING_CATEGORIES) {
+  for (const c of spendingCategories()) {
     const a = avg[c.id] ?? 0;
     if (a < 1) continue;
     out[c.id] = roundUp5(c.bucket === "wants" ? a * wantsScale : a);
@@ -166,20 +166,20 @@ export function savingTips(all: ClassifiedTransaction[], s: MonthSummary, budget
       detail: "This gap usually ends up on a credit card and starts costing interest. Start with the biggest “wants” category below.",
     });
 
-  for (const c of SPENDING_CATEGORIES) {
+  for (const c of spendingCategories()) {
     const spent = s.byCategory[c.id] ?? 0;
     const limit = budgets[c.id];
     if (limit && spent > limit)
       tips.push({
         id: `over-${c.id}`, severity: c.bucket === "wants" ? "serious" : "warning", monthly: spent - limit, category: c.id,
-        title: `${c.emoji} ${c.label} is ${fmt(spent - limit)} over budget`,
-        detail: `You spent ${fmt(spent)} against a ${fmt(limit)} budget.`,
+        title: `${c.emoji} ${c.label} is ${fmt(spent - limit)} over its limit`,
+        detail: `You spent ${fmt(spent)} against a ${fmt(limit)} limit.`,
       });
   }
 
   if (s.income > 0 && s.wants > s.income * 0.3) {
     const extra = s.wants - s.income * 0.3;
-    const biggest = SPENDING_CATEGORIES.filter((c) => c.bucket === "wants")
+    const biggest = spendingCategories().filter((c) => c.bucket === "wants")
       .map((c) => ({ c, v: s.byCategory[c.id] ?? 0 }))
       .sort((a, b) => b.v - a.v)[0];
     tips.push({
@@ -232,7 +232,7 @@ export function savingTips(all: ClassifiedTransaction[], s: MonthSummary, budget
     tips.push({
       id: "great", severity: "good", monthly: 0, lesson: "investing-101",
       title: "No leaks found this month 🎉",
-      detail: "You're under budget, saving 20%+, and paying no interest. Next step: invest what you save.",
+      detail: "You're under your limits, saving 20%+, and paying no interest. Next step: invest what you save.",
     });
 
   return tips.sort((a, b) => b.monthly - a.monthly);
@@ -267,7 +267,7 @@ export function moneyScore(all: ClassifiedTransaction[], s: MonthSummary, budget
 
   let penaltyJar = 0;
   let overCount = 0;
-  for (const c of SPENDING_CATEGORIES) {
+  for (const c of spendingCategories()) {
     const limit = budgets[c.id];
     const spent = s.byCategory[c.id] ?? 0;
     if (limit && spent > limit) {
@@ -275,7 +275,7 @@ export function moneyScore(all: ClassifiedTransaction[], s: MonthSummary, budget
       penaltyJar += spent - limit;
     }
   }
-  if (overCount) penalties.push({ label: `Over budget in ${overCount} categor${overCount > 1 ? "ies" : "y"}`, points: -Math.min(20, overCount * 5) });
+  if (overCount) penalties.push({ label: `Over the limit in ${overCount} categor${overCount > 1 ? "ies" : "y"}`, points: -Math.min(20, overCount * 5) });
   if (s.income > 0 && s.wants > s.income * 0.3) penalties.push({ label: "Wants above 30% of income", points: -10 });
 
   if (s.income > 0 && s.savingsRate >= 0.2) bonuses.push({ label: "Saved 20%+ of income", points: 5 });

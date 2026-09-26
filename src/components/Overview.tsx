@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { usePalette } from "../colors";
 import { pct, shortMonth, usd } from "../format";
 import type { MoneyScore, MonthSummary, Tip } from "../lib/analytics";
+import { categoryInfo } from "../lib/categories";
+import type { LimitStatus } from "../lib/limits";
+import { STATIC } from "../useAppData";
 import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
 
@@ -10,10 +14,12 @@ interface Props {
   history: MonthSummary[];
   score: MoneyScore;
   tips: Tip[];
+  /** Limit status for the current month (empty when looking at a past month). */
+  statuses: LimitStatus[];
   goTo: (tab: string) => void;
 }
 
-export function Overview({ summary: s, history, score, tips, goTo }: Props) {
+export function Overview({ summary: s, history, score, tips, statuses, goTo }: Props) {
   const pal = usePalette();
   const doubleCounted = s.naiveOutflow - s.spending - s.saved;
   return (
@@ -30,9 +36,11 @@ export function Overview({ summary: s, history, score, tips, goTo }: Props) {
         <Stat label="Interest & fees" value={usd(s.interestPaid, true)} tone={s.interestPaid > 0 ? "bad" : "good"} hint={s.interestPaid > 0 ? "Money lost to the bank" : "Nice — none"} />
       </section>
 
+      <LimitAlerts statuses={statuses} goTo={goTo} />
+
       {doubleCounted > 1 && (
         <section className="card accent">
-          <h2>Why your spreadsheet says you're in the negative</h2>
+          <h2>Your real spending</h2>
           <p>
             Adding up every withdrawal this month gives <strong>{usd(s.naiveOutflow)}</strong>. But{" "}
             <strong>{usd(s.transfersExcluded)}</strong> of that was credit card payments and moves between your own accounts —
@@ -42,7 +50,7 @@ export function Overview({ summary: s, history, score, tips, goTo }: Props) {
           </p>
           <div className="compare">
             <div>
-              <span className="muted small">Sheet-style total</span>
+              <span className="muted small">Every withdrawal added up</span>
               <span className="strike">{usd(s.naiveOutflow)}</span>
             </div>
             <span aria-hidden>→</span>
@@ -117,5 +125,46 @@ export function Stat({ label, value, hint, tone }: { label: string; value: strin
       <strong className={tone}>{value}</strong>
       {hint && <span className="muted small">{hint}</span>}
     </div>
+  );
+}
+
+function LimitAlerts({ statuses, goTo }: { statuses: LimitStatus[]; goTo: (tab: string) => void }) {
+  const [perm, setPerm] = useState(() => ("Notification" in window ? Notification.permission : "denied"));
+  if (!statuses.length) return null;
+  const withLimit = statuses.filter((x) => x.state !== "none");
+  const flagged = withLimit.filter((x) => x.state === "warn" || x.state === "over").sort((a, b) => b.used - a.used);
+  return (
+    <section className="card wide">
+      <div className="card-head">
+        <h2>Limits this month</h2>
+        <button className="link" onClick={() => goTo("categories")}>{withLimit.length ? "Edit limits →" : "Set limits →"}</button>
+      </div>
+      {!withLimit.length ? (
+        <p className="muted small">Set a monthly limit on categories like Eating Out or Alcohol and you'll be warned before you go over.</p>
+      ) : !flagged.length ? (
+        <p className="small good">✓ All {withLimit.length} limits on track.</p>
+      ) : (
+        <div className="alerts">
+          {flagged.map((x) => {
+            const c = categoryInfo(x.id);
+            return (
+              <div key={x.id} className={`alert ${x.state}`}>
+                <span>
+                  {x.state === "over" ? "⛔" : "⚠️"} <strong>{c.emoji} {c.label}</strong>: {usd(x.spent)} of {usd(x.limit ?? 0)}
+                </span>
+                <span className="small nowrap">
+                  {x.state === "over" ? <span className="bad">{usd(-x.left)} over</span> : <>{usd(x.perDay)}/day left</>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!STATIC && perm === "default" && (
+        <button className="link small mt-s" onClick={async () => setPerm(await Notification.requestPermission())}>
+          🔔 Also alert me on this device when a purchase gets close to a limit
+        </button>
+      )}
+    </section>
   );
 }

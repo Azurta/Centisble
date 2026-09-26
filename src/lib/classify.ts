@@ -1,4 +1,4 @@
-import { matchCategoryLabel } from "./categories";
+import { matchCategoryLabel, resolveCategory, spendingCategories } from "./categories";
 import type {
   Account,
   AccountType,
@@ -75,18 +75,32 @@ export function merchantKey(t: Pick<Transaction, "merchant" | "description">): s
 }
 
 export function guessCategory(t: Transaction, overrides?: Overrides): CategoryId {
+  return resolveCategory(rawCategory(t, overrides));
+}
+
+/** Keywords you gave a category, e.g. "starbucks" → Coffee. */
+function keywordCategory(text: string): CategoryId | undefined {
+  const l = text.toLowerCase();
+  for (const c of spendingCategories())
+    if (c.keywords?.some((k) => k.trim() && l.includes(k.trim().toLowerCase()))) return c.id;
+  return undefined;
+}
+
+function rawCategory(t: Transaction, overrides?: Overrides): CategoryId | undefined {
   if (overrides?.category[t.id]) return overrides.category[t.id];
   const key = merchantKey(t);
   if (overrides?.merchantRules[key]) return overrides.merchantRules[key];
+  const text = `${t.merchant ?? ""} ${t.description}`;
+  const own = keywordCategory(text);
+  if (own) return own;
   const imported = matchCategoryLabel(t.importedCategory);
   if (imported && !["income", "transfer", "savings"].includes(imported)) return imported;
-  const text = `${t.merchant ?? ""} ${t.description}`;
   for (const [re, id] of CATEGORY_RULES) if (re.test(text)) return id;
   const d = t.bankCategory?.detailed;
   if (d && BANK_DETAILED[d]) return BANK_DETAILED[d];
   const p = t.bankCategory?.primary;
   if (p && BANK_PRIMARY[p]) return BANK_PRIMARY[p];
-  return "misc";
+  return undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -167,7 +181,7 @@ export function classifyAll(
         kind === "income" ? "income"
         : kind === "transfer" ? "transfer"
         : kind === "savings" ? "savings"
-        : kind === "interest" ? (overrides.category[t.id] ?? "debt")
+        : kind === "interest" ? resolveCategory(overrides.category[t.id] ?? "debt")
         : category ?? guessCategory(t, overrides);
       return { ...t, kind, category: cat, reason, accountType: type };
     };

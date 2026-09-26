@@ -20,7 +20,7 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
   // Tips can overlap (e.g. "over budget" and "small purchases" in the same category) — take the largest per category.
   const potential: Partial<Record<CategoryId, number>> = {};
   for (const t of tips) if (t.category && t.monthly > 0) potential[t.category] = Math.max(potential[t.category] ?? 0, t.monthly);
-  const monthlyPotential = Object.values(potential).reduce((a, b) => a + (b ?? 0), 0);
+  const monthlyPotential = Object.values(potential).reduce<number>((a, b) => a + (b ?? 0), 0);
 
   const income = s.income || 1;
   const kept = Math.max(0, s.income - s.spending);
@@ -104,13 +104,13 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
           <div className="callout bad">
             <strong>Penalty jar: {usd(score.penaltyJar)}</strong>
             <p className="small">
-              You went over budget by this much. Accountability rule: move the same amount from checking into savings this week. Do it,
+              You went over your limits by this much. Accountability rule: move the same amount from checking into savings this week. Do it,
               and the “Moved money into savings” bonus shows up next month.
             </p>
           </div>
         )}
         <p className="muted small">
-          Score starts at 100. You lose points for spending more than you earn, saving under 20%, paying interest or late fees, going over budget,
+          Score starts at 100. You lose points for spending more than you earn, saving under 20%, paying interest or late fees, going over a limit,
           and letting wants pass 30% of income. You earn points back by saving and finishing lessons.
         </p>
       </section>

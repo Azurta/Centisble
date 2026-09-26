@@ -46,23 +46,8 @@ export interface ClassifiedTransaction extends Transaction {
   accountType: AccountType;
 }
 
-export type CategoryId =
-  | "debt"
-  | "rent"
-  | "car"
-  | "going_out"
-  | "entertainment"
-  | "groceries"
-  | "alcohol"
-  | "shopping"
-  | "subscriptions"
-  | "bills"
-  | "health"
-  | "travel"
-  | "misc"
-  | "income"
-  | "transfer"
-  | "savings";
+/** Built-in ids ("rent", "going_out", …) plus any category the user creates. */
+export type CategoryId = string;
 
 export type Bucket = "needs" | "wants" | "none";
 

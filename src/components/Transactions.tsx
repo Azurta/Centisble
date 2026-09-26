@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { usd } from "../format";
-import { CATEGORIES, categoryInfo } from "../lib/categories";
+import { allCategories, categoryInfo } from "../lib/categories";
 import type { CategoryId, ClassifiedTransaction, TxKind } from "../lib/types";
 import type { AppData } from "../useAppData";
 
@@ -36,7 +36,7 @@ export function Transactions({ data, month }: { data: AppData; month: string }) 
           <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" />
           <select value={cat} onChange={(e) => setCat(e.target.value as CategoryId | "")} aria-label="Filter by category">
             <option value="">All categories</option>
-            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+            {allCategories().map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
           </select>
           <label className="check"><input type="checkbox" checked={showTransfers} onChange={(e) => setShowTransfers(e.target.checked)} /> Show card payments & transfers</label>
           <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember category for merchant</label>
@@ -78,7 +78,7 @@ function Row({ t, data, remember, account }: { t: ClassifiedTransaction; data: A
           aria-label="Category"
           onChange={(e) => data.setCategory(t, e.target.value as CategoryId, remember)}
         >
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+          {allCategories().map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
         </select>
         {data.overrides.kind[t.id] || data.overrides.category[t.id] ? null : excluded ? (
           <button className="link small" onClick={() => data.setKind(t.id, "expense")}>Count as spending</button>
@@ -115,7 +115,7 @@ function AddManual({ onAdd }: { onAdd: AppData["addManual"] }) {
       <input placeholder="What was it?" value={desc} onChange={(e) => setDesc(e.target.value)} aria-label="Description" />
       <input placeholder="Amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" />
       <select value={category} onChange={(e) => setCategory(e.target.value as CategoryId)} aria-label="Category">
-        {CATEGORIES.filter((c) => c.bucket !== "none").map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+        {allCategories().filter((c) => c.bucket !== "none").map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
       </select>
       <button className="btn">Add</button>
       <button type="button" className="link" onClick={() => setOpen(false)}>Close</button>

@@ -11,9 +11,7 @@ import { STATIC, type AppData } from "../useAppData";
 export function Accounts({ data }: { data: AppData }) {
   return (
     <div className="grid">
-      <ImportSheets data={data} />
       {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
-      <ImportCsv data={data} />
       <section className="card">
         <h2>Your accounts</h2>
         {!data.accounts.length ? (
@@ -36,6 +34,16 @@ export function Accounts({ data }: { data: AppData }) {
           )}
         </div>
       </section>
+      <details className="card wide more">
+        <summary>Other ways to add purchases</summary>
+        <p className="muted small">
+          Not needed once your bank is connected. Useful for cash, an account the bank connection doesn't support, or bringing in history.
+        </p>
+        <div className="stack">
+          <ImportSheets data={data} />
+          <ImportCsv data={data} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -195,14 +203,14 @@ function ImportCsv({ data }: { data: AppData }) {
 function OnlineNote() {
   return (
     <section className="card">
-      <h2>Automatic bank sync</h2>
-      <p className="muted small">
-        This online version works with your spreadsheets, bank CSVs and purchases you add by hand. Everything you import stays in this
-        browser on this device.
+      <h2>Connect your bank</h2>
+      <p className="small">
+        This is the preview version. It can't connect to banks: a bank connection needs a secure server holding your private bank-link
+        keys, and this page doesn't have one.
       </p>
       <p className="muted small">
-        Linking your bank so purchases show up on their own needs the full version running on a computer with free Plaid keys — see the
-        README in the project.
+        Once the full version is hosted, you connect each bank and card once and every purchase shows up on its own. Until then you can try
+        everything with demo data, set up your categories and limits, and add purchases under “Other ways to add purchases”.
       </p>
     </section>
   );
@@ -229,8 +237,8 @@ function ImportSheets({ data }: { data: AppData }) {
   };
 
   return (
-    <section className="card wide">
-      <h2>Import your monthly budget sheets (.xlsx)</h2>
+    <section className="card">
+      <h2>Import monthly budget sheets (.xlsx)</h2>
       <p className="muted small">
         In Google Sheets choose <em>File → Download → Microsoft Excel (.xlsx)</em>, then pick one or more months here. The app reads your
         income, every item, its category and what you paid with. Rows like “Capital one pay” or “Discover Debt” are recognised as credit

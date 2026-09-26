@@ -1,9 +1,9 @@
 {
-  "name": "azurta",
+  "name": "centsible",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Azurta - automatic, honest spending tracker and budgeting coach",
+  "description": "Centsible - automatic, honest spending tracker and budgeting coach",
   "scripts": {
     "dev": "concurrently -n web,api -c blue,green \"vite\" \"tsx watch server/index.ts\"",
     "dev:web": "vite",

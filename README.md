@@ -1,18 +1,32 @@
-# Azurta — honest, automatic budgeting
+# Centsible — honest, automatic budgeting
 
-Azurta tracks your spending automatically, sorts it into categories, shows where you could save, and coaches you with lessons and a Money Score.
+*(Working name — change `APP_NAME` in `src/brand.ts` and the `<title>` in `index.html`.)*
 
-It fixes the main problem with a hand-built budget sheet: **card payments counted as spending**. If you put everything on a credit card for points and then pay the card from checking, adding up every withdrawal counts each purchase twice. Azurta counts a purchase once, when you swipe the card. The card payment is marked "Not spending". Only **interest and fees** are added on top.
+Centsible tracks your spending automatically, sorts it into categories, shows where you could save, and coaches you with lessons and a Money Score.
+
+It fixes the main problem with a hand-built budget sheet: **card payments counted as spending**. If you put everything on a credit card for points and then pay the card from checking, adding up every withdrawal counts each purchase twice. Centsible counts a purchase once, when you swipe the card. The card payment is marked "Not spending". Only **interest and fees** are added on top.
 
 ## Features
 
 | What you asked for | How it works |
 |---|---|
 | **Automatic** | Link checking, savings, and credit cards through [Plaid](https://plaid.com). New purchases show up on their own. With a webhook URL set, they arrive within minutes of a swipe. Without one, the server checks every 15 minutes. The page updates live. |
-| **Categories** | Debt, Rent, Car, Going Out, Groceries, Alcohol, Shopping, Subscriptions, Bills, Health, Travel, Misc. Merchants are sorted by keyword rules and the bank's own category data. You can fix any transaction. Tick "Remember category for merchant" and every future purchase from that merchant is sorted the same way. |
+| **Categories** | Starts with Rent, Debt, Car & Gas, Groceries, Bills, Eating / Going Out, Entertainment, Alcohol, Shopping, Subscriptions, Misc. **Add, rename or delete** categories under **Categories & Limits**. Give a category **auto-sort words** (e.g. Coffee → "starbucks, dunkin") and matching purchases land there automatically. Everything else is sorted by built-in merchant rules and the bank's own category data. Fix any transaction and tick "Remember category for merchant" to sort that merchant the same way from then on. Deleting a category moves its purchases to Misc. |
+| **Limits** | Set a monthly limit on any category. "Want" categories warn you at 80% (adjustable), and any category is flagged when it goes over. You see how much you can still spend per day, a pop-up (plus a phone/desktop notification if you allow it) when a new purchase crosses a line, and a "Limits this month" panel on the Overview. Going over costs Money Score points and adds the overage to the penalty jar. The app can't decline a card swipe (see below). |
 | **Where to save** | The **Save** tab has a pie chart of estimated monthly savings by category and a 50/30/20 check. It also lists tips (interest paid, overspending, over-budget categories, many small purchases, alcohol share, recurring charges). It shows what the savings would grow to if invested. |
 | **Accurate numbers** | Card payments and moves between your own accounts are found in two ways: by matching the same amount leaving one account and arriving in another, and by text such as "PAYMENT THANK YOU" or "EPAY". Refunds reduce spending. Interest is counted as spending under Debt. Each transaction shows *why* it was counted the way it was. The Overview puts the sheet-style total next to your real spending. |
 | **Education & accountability** | 9 short lessons (budgeting, 50/30/20, credit cards, paying yourself first, emergency fund, subscriptions, debt payoff, investing). Each has video links and a quick quiz. You can save your own YouTube videos to watch in the app. The **Money Score** (0–100) takes points off for spending more than you earn, saving under 20%, paying interest or late fees, going over budget, and wants above 30%. You earn points back by saving and finishing lessons. Going over budget fills a **penalty jar**: the amount you should move into savings. |
+
+## Making it fully automatic
+
+Purchases flow in on their own only when the **server** is running somewhere with your Plaid keys, because bank connections need a private key that can't live in a web page:
+
+1. **Plaid account.** Sign up at https://dashboard.plaid.com. Sandbox (fake banks) is free. To connect your real accounts, request Production access; see Plaid's pricing page for what's free for personal use.
+2. **Host the server.** Any Node host works (Render, Railway, Fly.io, a home computer or Raspberry Pi). Run `npm run build && npm start` with the `.env` values set, and keep `data/` on persistent storage.
+3. **Turn on instant updates.** Set `PLAID_WEBHOOK_URL=https://<your-host>/api/plaid/webhook` and `APP_TOKEN`. Plaid then tells the server about a purchase as soon as your bank posts it, usually within minutes (pending card swipes can take longer at some banks).
+4. Open the site on your phone and choose **Add to Home Screen**.
+
+**About hard limits:** a budgeting app can watch and warn, but only your card issuer can decline a purchase. For a true hard stop, use your bank's card controls (many let you set spending limits or lock a card) or virtual cards with spending caps.
 
 ## Run it
 

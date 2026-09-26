@@ -1,19 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { APP_NAME } from "./brand";
 import { Accounts } from "./components/Accounts";
-import { Budgets } from "./components/Budgets";
+import { Categories } from "./components/Categories";
 import { Insights } from "./components/Insights";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
 import { Transactions } from "./components/Transactions";
 import { monthLabel } from "./format";
 import { findRecurring, monthsIn, moneyScore, savingTips, summarize, trend } from "./lib/analytics";
+import { categoryInfo } from "./lib/categories";
+import { limitStatuses, newlyCrossed, type LimitStatus } from "./lib/limits";
+import { usd } from "./format";
 import { useAppData } from "./useAppData";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: "📊" },
   { id: "transactions", label: "Transactions", icon: "🧾" },
   { id: "insights", label: "Save", icon: "💡" },
-  { id: "budgets", label: "Budgets", icon: "🎯" },
+  { id: "categories", label: "Categories & Limits", icon: "🎯" },
   { id: "learn", label: "Learn", icon: "🎓" },
   { id: "accounts", label: "Accounts", icon: "🏦" },
 ] as const;
@@ -35,6 +39,16 @@ export default function App() {
   const recurring = useMemo(() => findRecurring(data.classified, month), [data.classified, month]);
   const score = useMemo(() => moneyScore(data.classified, summary, data.budgets, data.lessonsDone.length), [data.classified, summary, data.budgets, data.lessonsDone]);
 
+  const statuses = useMemo(() => limitStatuses(summary, data.budgets, data.alertAt), [summary, data.budgets, data.alertAt, data.categories]);
+
+  // Alerts are about *this* month, whatever month is on screen.
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const current = useMemo(
+    () => limitStatuses(summarize(data.classified, thisMonth), data.budgets, data.alertAt),
+    [data.classified, data.budgets, data.alertAt, thisMonth, data.categories],
+  );
+  const toast = useLimitAlerts(current);
+
   const goTo = (t: string, lesson?: string) => {
     setTab(t as Tab);
     setLessonFocus(lesson);
@@ -47,7 +61,7 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div className="brand">
-          <span className="logo" aria-hidden>◆</span> Azurta
+          <span className="logo" aria-hidden>◆</span> {APP_NAME}
         </div>
         {!empty && (
           <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
@@ -66,22 +80,23 @@ export default function App() {
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
-        {empty && tab !== "accounts" && tab !== "learn" ? (
+        {empty && tab !== "accounts" && tab !== "learn" && tab !== "categories" ? (
           <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
         ) : tab === "overview" ? (
-          <Overview summary={summary} history={history} score={score} tips={tips} goTo={goTo} />
+          <Overview summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} goTo={goTo} />
         ) : tab === "transactions" ? (
           <Transactions data={data} month={month} />
         ) : tab === "insights" ? (
           <Insights summary={summary} tips={tips} recurring={recurring} score={score} goTo={goTo} />
-        ) : tab === "budgets" ? (
-          <Budgets data={data} summary={summary} history={history} />
+        ) : tab === "categories" ? (
+          <Categories data={data} summary={summary} history={history} statuses={statuses} />
         ) : tab === "learn" ? (
           <Learn data={data} focus={lessonFocus} />
         ) : (
           <Accounts data={data} />
         )}
       </main>
+      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
@@ -91,13 +106,43 @@ function Welcome({ onDemo, onConnect }: { onDemo: () => void; onConnect: () => v
     <section className="card welcome">
       <h1>Know where every dollar goes.</h1>
       <p>
-        Azurta pulls in your purchases automatically, sorts them into categories, and shows your <strong>real</strong> spending — credit card
-        payments aren't counted twice, only interest is.
+        Connect your bank and cards once. {APP_NAME} brings in every purchase by itself, sorts it into your categories, warns you before you
+        hit a limit, and shows your <strong>real</strong> spending: credit card payments aren't counted twice, only interest is.
       </p>
       <div className="row">
-        <button className="btn" onClick={onConnect}>Import my budget sheets</button>
+        <button className="btn" onClick={onConnect}>Connect my bank</button>
         <button className="btn secondary" onClick={onDemo}>Try with demo data</button>
       </div>
     </section>
   );
+}
+
+/** Pop up (and send a device notification, if allowed) when a new purchase pushes a category near or over its limit. */
+function useLimitAlerts(current: LimitStatus[]): string | null {
+  const prev = useRef<LimitStatus[] | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = current;
+    if (!before) return; // first load: the Overview already shows where you stand
+    const crossed = newlyCrossed(before, current);
+    if (!crossed.length) return;
+    const msg = crossed
+      .map((s) => {
+        const c = categoryInfo(s.id);
+        return s.state === "over"
+          ? `⛔ ${c.label} is over its ${usd(s.limit ?? 0)} limit by ${usd(s.spent - (s.limit ?? 0))}.`
+          : `⚠️ ${c.label}: ${Math.round(s.used * 100)}% of the limit used, ${usd(s.left)} left.`;
+      })
+      .join(" ");
+    setToast(msg);
+    try {
+      if ("Notification" in window && Notification.permission === "granted") new Notification(APP_NAME, { body: msg });
+    } catch {
+      /* notifications unavailable */
+    }
+    const t = setTimeout(() => setToast(null), 8000);
+    return () => clearTimeout(t);
+  }, [current]);
+  return toast;
 }

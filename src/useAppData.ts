@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type ServerStatus } from "./api";
+import { DEFAULT_CATEGORIES, freeColorSlot, MISC_ID, newCategoryId, setCategories, type CategoryInfo } from "./lib/categories";
 import { classifyAll, merchantKey } from "./lib/classify";
 import { demoData } from "./lib/demo";
 import { loadJson, saveJson } from "./lib/storage";
@@ -23,6 +24,11 @@ export function useAppData() {
   const [local, setLocal] = usePersisted<LocalData>("azurta.local", { accounts: [], transactions: [] });
   const [overrides, setOverrides] = usePersisted<Overrides>("azurta.overrides", { category: {}, kind: {}, merchantRules: {} });
   const [budgets, setBudgets] = usePersisted<Budgets>("azurta.budgets", {});
+  const [categories, setCategoryList] = usePersisted<CategoryInfo[]>("azurta.categories", DEFAULT_CATEGORIES);
+  /** Warn when a category reaches this share of its limit. */
+  const [alertAt, setAlertAt] = usePersisted<number>("azurta.alertAt", 0.8);
+  // The classifier and analytics read the active list from the categories module.
+  setCategories(categories);
   const [lessonsDone, setLessonsDone] = usePersisted<string[]>("azurta.lessons", []);
   const [videos, setVideos] = usePersisted<{ url: string; title: string }[]>("azurta.videos", []);
 
@@ -76,7 +82,7 @@ export function useAppData() {
 
   const classified = useMemo(
     () => classifyAll(transactions, accounts, overrides).sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, accounts, overrides],
+    [transactions, accounts, overrides, categories],
   );
 
   const setCategory = (t: Transaction, category: CategoryId, rememberMerchant: boolean) =>
@@ -89,6 +95,31 @@ export function useAppData() {
         merchantRules: rememberMerchant ? { ...o.merchantRules, [merchantKey(t)]: category } : o.merchantRules,
       };
     });
+
+  const addCategory = (c: Omit<CategoryInfo, "id" | "color">, limit?: number) => {
+    const id = newCategoryId(c.label, categories);
+    // New categories go before Misc so Misc stays last.
+    setCategoryList((list) => {
+      const created = { ...c, id, color: freeColorSlot(list) };
+      const i = list.findIndex((x) => x.id === MISC_ID);
+      return i < 0 ? [...list, created] : [...list.slice(0, i), created, ...list.slice(i)];
+    });
+    if (limit) setBudgets((b) => ({ ...b, [id]: limit }));
+  };
+
+  const updateCategory = (id: string, patch: Partial<CategoryInfo>) =>
+    setCategoryList((list) => list.map((c) => (c.id === id ? { ...c, ...patch, id } : c)));
+
+  /** Purchases in a deleted category move to Misc automatically. */
+  const removeCategory = (id: string) => {
+    if (id === MISC_ID) return;
+    setCategoryList((list) => list.filter((c) => c.id !== id));
+    setBudgets((b) => {
+      const next = { ...b };
+      delete next[id];
+      return next;
+    });
+  };
 
   const setKind = (id: string, kind: TxKind | null) =>
     setOverrides((o) => {
@@ -139,7 +170,8 @@ export function useAppData() {
   };
 
   return {
-    accounts, classified, overrides, budgets, setBudgets, lessonsDone, setLessonsDone, videos, setVideos,
+    accounts, classified, overrides, budgets, setBudgets,
+    categories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
     setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,
     hasDemo: local.accounts.some((a) => a.source === "demo"),

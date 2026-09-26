@@ -109,5 +109,5 @@ if (process.env.NODE_ENV === "production") {
 
 const port = Number(process.env.PORT ?? 8787);
 app.listen(port, () => {
-  console.log(`Azurta API on http://localhost:${port} — Plaid ${plaidConfigured ? `ready (${process.env.PLAID_ENV ?? "sandbox"})` : "not configured (CSV import & demo still work)"}`);
+  console.log(`Centsible API on http://localhost:${port} — Plaid ${plaidConfigured ? `ready (${process.env.PLAID_ENV ?? "sandbox"})` : "not configured (CSV import & demo still work)"}`);
 });

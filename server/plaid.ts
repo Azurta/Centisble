@@ -27,7 +27,7 @@ const client = new PlaidApi(
 export async function createLinkToken(userId: string) {
   const res = await client.linkTokenCreate({
     user: { client_user_id: userId },
-    client_name: "Azurta Budget",
+    client_name: "Centsible",
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: "en",

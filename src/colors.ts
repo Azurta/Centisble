@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { categoryInfo } from "./lib/categories";
 import type { CategoryId } from "./lib/types";
 
 /** Validated categorical palette (light / dark steps of the same eight hues). */
@@ -6,22 +7,8 @@ const LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300",
 const DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 const OTHER = "#898781";
 
-/**
- * Fixed color per category (color follows the category, never its rank).
- * Eight slots; the remaining categories fold into "Other" in charts.
- */
-export const CATEGORY_SLOT: Partial<Record<CategoryId, number>> = {
-  rent: 0,
-  going_out: 1,
-  groceries: 2,
-  shopping: 3,
-  alcohol: 4,
-  car: 5,
-  entertainment: 6,
-  debt: 7,
-};
-
-export const hasOwnColor = (id: CategoryId) => CATEGORY_SLOT[id] != null;
+/** Each category keeps its own color slot (color follows the category, never its rank); the rest fold into "Other". */
+export const hasOwnColor = (id: CategoryId) => categoryInfo(id).id === id && categoryInfo(id).color != null;
 
 /** Dark when the page's theme toggle says so, or when there's no toggle and the OS is dark. */
 export function useDark() {
@@ -52,7 +39,7 @@ export function usePalette() {
   return {
     dark,
     category: (id: CategoryId | "other") => {
-      const s = id === "other" ? undefined : CATEGORY_SLOT[id];
+      const s = id === "other" || !hasOwnColor(id) ? undefined : categoryInfo(id).color;
       return s == null ? OTHER : slots[s];
     },
     series: slots,
