@@ -17,6 +17,7 @@ export interface ServerStatus {
   env: string;
   webhook: boolean;
   institutions: { itemId: string; institution?: string; lastSync?: string }[];
+  simplefin: { connected: boolean; lastSync?: string; institutions?: string[]; errors?: string[] };
 }
 
 export const api = {
@@ -25,6 +26,9 @@ export const api = {
   linkToken: () => call<{ linkToken: string }>("/api/link/token", { method: "POST" }),
   exchange: (publicToken: string, institution?: string) =>
     call<{ changed: number }>("/api/link/exchange", { method: "POST", body: JSON.stringify({ publicToken, institution }) }),
+  simplefinConnect: (setupToken: string) =>
+    call<{ changed: number; institutions: string[] }>("/api/simplefin/connect", { method: "POST", body: JSON.stringify({ setupToken }) }),
+  simplefinDisconnect: () => call<{ ok: boolean }>("/api/simplefin", { method: "DELETE" }),
   sync: () => call<{ changed: number }>("/api/sync", { method: "POST" }),
   unlink: (itemId: string) => call<{ ok: boolean }>(`/api/items/${itemId}`, { method: "DELETE" }),
   getSettings: () => call<{ settings: Record<string, unknown> | null; updatedAt: string | null }>("/api/settings"),

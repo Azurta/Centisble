@@ -19,16 +19,38 @@ It fixes the main problem with a hand-built budget sheet: **card payments counte
 | **Accurate numbers** | Card payments and moves between your own accounts are found in two ways: by matching the same amount leaving one account and arriving in another, and by text such as "PAYMENT THANK YOU" or "EPAY". Refunds reduce spending. Interest is counted as spending under Debt. Each transaction shows *why* it was counted the way it was. The Overview puts the sheet-style total next to your real spending. |
 | **Education & accountability** | 9 short lessons (budgeting, 50/30/20, credit cards, paying yourself first, emergency fund, subscriptions, debt payoff, investing). Each has video links and a quick quiz. You can save your own YouTube videos to watch in the app. The **Money Score** (0–100) takes points off for spending more than you earn, saving under 20%, paying interest or late fees, going over budget, and wants above 30%. You earn points back by saving and finishing lessons. Going over budget fills a **penalty jar**: the amount you should move into savings. |
 
-## Making it fully automatic
+## Run it with your own accounts
 
-Purchases flow in on their own only when the **server** is running somewhere with your Plaid keys, because bank connections need a private key that can't live in a web page:
+### 1. Pick a bank connection (you can use both)
 
-1. **Plaid account.** Sign up at https://dashboard.plaid.com. Sandbox (fake banks) is free. To connect your real accounts, request Production access; see Plaid's pricing page for what's free for personal use.
-2. **Host the server.** Any Node host works (Render, Railway, Fly.io, a home computer or Raspberry Pi). Run `npm run build && npm start` with the `.env` values set, and keep `data/` on persistent storage.
-3. **Turn on instant updates.** Set `PLAID_WEBHOOK_URL=https://<your-host>/api/plaid/webhook` and `APP_TOKEN`. Plaid then tells the server about a purchase as soon as your bank posts it, usually within minutes (pending card swipes can take longer at some banks).
-4. Open the site on your phone and choose **Add to Home Screen**.
+| | **Plaid** | **SimpleFIN Bridge** |
+|---|---|---|
+| Cost | Free on Plaid's **Trial plan** (up to 10 connected banks, real data, includes Chase) | About **$15/year**, paid by you to SimpleFIN, up to 25 banks |
+| Speed | New purchases within minutes (webhook) | About once a day |
+| Interest rates, due dates | Yes, automatically (Liabilities) | No, enter rates yourself |
+| Setup | Sign up at dashboard.plaid.com, copy client ID + secret into the server's settings | Sign up at bridge.simplefin.org, connect banks there, paste a Setup Token into the app |
 
-**About hard limits:** a budgeting app can watch and warn, but only your card issuer can decline a purchase. For a true hard stop, use your bank's card controls (many let you set spending limits or lock a card) or virtual cards with spending caps.
+### 2. Host it (so it keeps syncing when your laptop is closed)
+
+**Render (easiest):** push this repo to GitHub, then on render.com choose **New → Blueprint** and pick the repo. `render.yaml` sets everything up (about $7/month for an always-on instance plus a small disk that keeps your data). Enter your Plaid keys when asked. Your app password (`APP_TOKEN`) is generated for you; find it under the service's **Environment** tab. Plaid's webhook URL is set automatically from the Render address.
+
+**Your own computer:** `npm run build && APP_TOKEN=<long-password> npm start`, then open http://localhost:8787. It only syncs while the computer is on.
+
+### 3. Use it on your phone
+
+Open your Render URL, enter the app password once, and choose **Share → Add to Home Screen**. Categories, limits and edits are stored on your server, so your phone and computer show the same thing.
+
+**Security notes:** bank access tokens live only on your server (`data/db.json`, readable only by the server). Hosted mode refuses to start without `APP_TOKEN`. The app only reads data; it can't move money.
+
+**About hard limits:** the app watches and warns, but only your card issuer can decline a purchase. For a true hard stop, use your bank's card controls.
+
+## Sharing it with other people (not yet)
+
+Today it's built for **one person per server**. Before other people can connect their own accounts, it needs:
+- **Sign-up and login**, with each person's data kept separate (right now one password opens everything on the server).
+- **Encryption** of stored bank tokens, plus backups.
+- **Plaid full Production approval** (the Trial plan's 10 connections are shared by everyone), or each user brings their own SimpleFIN subscription.
+- **A privacy policy and terms**, and Plaid's security questionnaire.
 
 ## Run it
 

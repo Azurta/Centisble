@@ -3,6 +3,7 @@ import express from "express";
 import path from "node:path";
 import type { Response } from "express";
 import { createLinkToken, exchangePublicToken, plaidConfigured, syncAll, syncItem, webhookUrl } from "./plaid";
+import { claimSetupToken, syncSimplefin } from "./simplefin";
 import { db, save } from "./store";
 
 if (process.env.NODE_ENV === "production" && !process.env.APP_TOKEN) {
@@ -45,6 +46,9 @@ app.get("/api/status", (_req, res) => {
     env: process.env.PLAID_ENV ?? "sandbox",
     webhook: Boolean(webhookUrl()),
     institutions: db.items.map((i) => ({ itemId: i.itemId, institution: i.institution, lastSync: i.lastSync })),
+    simplefin: db.simplefin
+      ? { connected: true, lastSync: db.simplefin.lastSync, institutions: db.simplefin.institutions ?? [], errors: db.simplefin.errors ?? [] }
+      : { connected: false },
   });
 });
 
@@ -88,8 +92,27 @@ app.post("/api/link/exchange", async (req, res) => {
   }
 });
 
+/* SimpleFIN: paste a Setup Token once; we keep the private Access URL on the server. */
+app.post("/api/simplefin/connect", async (req, res) => {
+  try {
+    const accessUrl = await claimSetupToken(String(req.body?.setupToken ?? ""));
+    db.simplefin = { accessUrl };
+    save();
+    const changed = await syncSimplefin();
+    broadcast("transactions", { changed });
+    res.json({ ok: true, changed, institutions: db.simplefin.institutions ?? [] });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+app.delete("/api/simplefin", (_req, res) => {
+  db.simplefin = undefined;
+  save();
+  res.json({ ok: true });
+});
+
 app.post("/api/sync", async (_req, res) => {
-  const changed = await syncAll();
+  const changed = (await syncAll()) + (await syncSimplefin().catch((e) => (console.error("[simplefin]", e), 0)));
   if (changed) broadcast("transactions", { changed });
   res.json({ changed });
 });
@@ -112,6 +135,13 @@ app.post("/api/plaid/webhook", async (req, res) => {
   const changed = await syncItem(item).catch((e) => (console.error(e), 0));
   if (changed) broadcast("transactions", { changed });
 });
+
+/* SimpleFIN refreshes about daily and allows roughly 24 requests a day: check every 3 hours. */
+setInterval(async () => {
+  if (!db.simplefin) return;
+  const changed = await syncSimplefin().catch((e) => (console.error("[simplefin]", e), 0));
+  if (changed) broadcast("transactions", { changed });
+}, 3 * 60 * 60_000);
 
 /* Fallback when no public webhook URL is configured. */
 const pollMinutes = Number(process.env.POLL_MINUTES ?? 15);

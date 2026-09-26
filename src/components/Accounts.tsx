@@ -3,7 +3,6 @@ import { usePlaidLink } from "react-plaid-link";
 import { api } from "../api";
 import { parseBudgetWorkbook, readXlsx, type SheetImport } from "../lib/budgetSheet";
 import { guessMapping, looksNegative, parseCsv, rowsToTransactions, type CsvMapping } from "../lib/csv";
-import { saveJson } from "../lib/storage";
 import { isDebt } from "../lib/networth";
 import { paymentFor, paymentSite, payoffPlan } from "../lib/payoff";
 import type { Account, AccountType } from "../lib/types";
@@ -83,44 +82,52 @@ function usePlaid(data: AppData, setMsg: (m: string) => void) {
 
 function ConnectBank({ data }: { data: AppData }) {
   const [msg, setMsg] = useState<string | null>(null);
-  const [token, setToken] = useState("");
   const { status, serverError } = data;
-  const startLink = usePlaid(data, setMsg);
+  const connected = (status?.institutions.length ?? 0) > 0 || status?.simplefin.connected;
 
   return (
     <section className="card">
       <h2>Connect your bank & cards</h2>
       <p className="muted small">
-        Link checking, savings and every credit card. New purchases appear here automatically — usually within minutes of swiping — and
-        card payments are matched so they're never counted twice.
+        Link checking, savings and every credit card and loan. Purchases and balances then come in by themselves, and card payments are
+        matched so they're never counted twice.
       </p>
-      {serverError === "unauthorized" ? (
-        <form className="filters" onSubmit={(e) => { e.preventDefault(); saveJson("azurta.token", token); data.refresh(); }}>
-          <input type="password" placeholder="App token" value={token} onChange={(e) => setToken(e.target.value)} aria-label="App token" />
-          <button className="btn">Unlock</button>
-        </form>
-      ) : serverError ? (
-        <p className="callout">The sync server isn't running. Start it with <code>npm run dev</code> to link banks. CSV import and demo data work without it.</p>
-      ) : status && !status.plaidConfigured ? (
-        <p className="callout">
-          Add your free Plaid keys to <code>.env</code> (see README) and restart the server to enable automatic bank sync.
-        </p>
+      {serverError ? (
+        <p className="callout">The sync server isn't running. Start it with <code>npm run dev</code> (or host it, see README) to link banks.</p>
+      ) : !status ? null : (
+        <div className="stack">
+          <PlaidOption data={data} setMsg={setMsg} />
+          <SimplefinOption data={data} setMsg={setMsg} />
+          {connected && (
+            <div className="row">
+              <button className="btn secondary" onClick={async () => { const r = await api.sync(); setMsg(`${r.changed} updates`); data.refresh(); }}>Sync now</button>
+              {data.lastUpdate && <span className="muted small">Last refreshed {data.lastUpdate.toLocaleTimeString()}</span>}
+            </div>
+          )}
+        </div>
+      )}
+      {msg && <p className="small">{msg}</p>}
+    </section>
+  );
+}
+
+function PlaidOption({ data, setMsg }: { data: AppData; setMsg: (m: string) => void }) {
+  const status = data.status!;
+  const startLink = usePlaid(data, setMsg);
+  return (
+    <div className="connector">
+      <div className="connector-head">
+        <strong>Plaid</strong>
+        <span className="muted small">Updates within minutes · free for up to 10 banks on Plaid's Trial plan</span>
+      </div>
+      {!status.plaidConfigured ? (
+        <p className="muted small">Add your Plaid keys to the server's settings (PLAID_CLIENT_ID, PLAID_SECRET) to turn this on. See README.</p>
       ) : (
         <>
-          <div className="row">
-            <button className="btn" onClick={async () => {
-              try { await startLink(); } catch (e) { setMsg((e as Error).message); }
-            }}>Connect an account</button>
-            {!!status?.institutions.length && <button className="btn secondary" onClick={async () => { const r = await api.sync(); setMsg(`${r.changed} updates`); data.refresh(); }}>↻ Sync now</button>}
-          </div>
-          {status && (
-            <p className="muted small">
-              Plaid {status.env} · {status.webhook ? "instant updates via webhook" : "checking for new transactions every few minutes"}
-              {data.lastUpdate && ` · last refreshed ${data.lastUpdate.toLocaleTimeString()}`}
-            </p>
-          )}
+          <button className="btn" onClick={async () => { try { await startLink(); } catch (e) { setMsg((e as Error).message); } }}>Connect with Plaid</button>
+          <p className="muted small">{status.env === "sandbox" ? "Sandbox (test banks) · " : ""}{status.webhook ? "Instant updates via webhook" : "Checks for new purchases every few minutes"}</p>
           <ul className="list">
-            {status?.institutions.map((i) => (
+            {status.institutions.map((i) => (
               <li key={i.itemId}>
                 <span>{i.institution ?? "Bank"} <span className="muted small">{i.lastSync ? `synced ${new Date(i.lastSync).toLocaleString()}` : ""}</span></span>
                 <button className="link small" onClick={async () => { await api.unlink(i.itemId); data.refresh(); }}>Unlink</button>
@@ -129,8 +136,60 @@ function ConnectBank({ data }: { data: AppData }) {
           </ul>
         </>
       )}
-      {msg && <p className="small">{msg}</p>}
-    </section>
+    </div>
+  );
+}
+
+function SimplefinOption({ data, setMsg }: { data: AppData; setMsg: (m: string) => void }) {
+  const sf = data.status!.simplefin;
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="connector">
+      <div className="connector-head">
+        <strong>SimpleFIN</strong>
+        <span className="muted small">Updates about once a day · about $15/year, paid to SimpleFIN, up to 25 banks</span>
+      </div>
+      {sf.connected ? (
+        <>
+          <ul className="list">
+            {(sf.institutions?.length ? sf.institutions : ["Connected"]).map((n) => <li key={n}><span>{n}</span></li>)}
+          </ul>
+          <p className="muted small">
+            {sf.lastSync ? `Synced ${new Date(sf.lastSync).toLocaleString()}. ` : ""}Add or remove banks on the SimpleFIN Bridge site; they show up here on the next sync.
+            {sf.errors?.map((e) => <span key={e} className="bad"> {e}</span>)}
+          </p>
+          <button className="link small" onClick={async () => { await api.simplefinDisconnect(); data.refresh(); }}>Disconnect SimpleFIN</button>
+        </>
+      ) : (
+        <form
+          className="stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            try {
+              const r = await api.simplefinConnect(token);
+              setMsg(`Connected ${r.institutions.join(", ") || "SimpleFIN"}: ${r.changed} transactions imported.`);
+              setToken("");
+              data.refresh();
+            } catch (err) {
+              setMsg((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="muted small">
+            1. Create an account at <a href="https://bridge.simplefin.org" target="_blank" rel="noreferrer">bridge.simplefin.org</a> and connect your banks there.
+            2. Create a <strong>Setup Token</strong> and paste it here.
+          </p>
+          <div className="filters">
+            <input id="sf-token" placeholder="Paste Setup Token" value={token} onChange={(e) => setToken(e.target.value)} aria-label="SimpleFIN Setup Token" />
+            <button className="btn secondary" disabled={!token.trim() || busy}>{busy ? "Connecting…" : "Connect"}</button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 

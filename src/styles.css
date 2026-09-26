@@ -452,3 +452,7 @@ details.more[open] > summary { margin-bottom: 12px; }
 .due > div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 8px 10px; }
 .due dt { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .due dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.connector { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: grid; gap: 8px; }
+.connector-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.connector .btn { justify-self: start; }
+.connector .link { justify-self: start; margin-left: 0; }

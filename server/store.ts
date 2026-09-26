@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Account, Transaction } from "../src/lib/types";
+import type { SimplefinConnection } from "./simplefin";
 
 export interface Item {
   itemId: string;
@@ -18,6 +19,7 @@ interface Db {
   transactions: Transaction[];
   /** App settings (categories, limits, edits, home layout…) shared by every device you open the app on. */
   settings?: Record<string, unknown>;
+  simplefin?: SimplefinConnection;
   settingsUpdatedAt?: string;
 }
 
