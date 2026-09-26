@@ -5,11 +5,14 @@ import { Categories } from "./components/Categories";
 import { Insights } from "./components/Insights";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
-import { Transactions } from "./components/Transactions";
+import { Transactions, type TxFilter } from "./components/Transactions";
 import { monthLabel } from "./format";
 import { findRecurring, monthsIn, moneyScore, savingTips, summarize, trend } from "./lib/analytics";
 import { categoryInfo } from "./lib/categories";
 import { limitStatuses, newlyCrossed, type LimitStatus } from "./lib/limits";
+import { netWorth } from "./lib/networth";
+import type { Account } from "./lib/types";
+import type { Nav } from "./components/Overview";
 import { usd } from "./format";
 import { useAppData } from "./useAppData";
 
@@ -49,10 +52,33 @@ export default function App() {
   );
   const toast = useLimitAlerts(current);
 
+  const nw = useMemo(() => netWorth(data.accounts, data.classified, month), [data.accounts, data.classified, month]);
+  const [txFilter, setTxFilter] = useState<TxFilter>({});
+  const [anchor, setAnchor] = useState<string>();
+
+  /** `t` may carry a section to scroll to, e.g. "accounts#debts". */
   const goTo = (t: string, lesson?: string) => {
-    setTab(t as Tab);
+    const [tabId, hash] = t.split("#");
+    setTab(tabId as Tab);
     setLessonFocus(lesson);
+    setAnchor(hash);
+    if (tabId === "transactions") setTxFilter({});
     window.scrollTo({ top: 0 });
+  };
+  useEffect(() => {
+    if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [tab, anchor]);
+
+  const accountsWithTx = useMemo(() => new Set(data.classified.map((t) => t.accountId)), [data.classified]);
+  const nav: Nav = {
+    tab: goTo,
+    transactions: (filter) => {
+      setTxFilter(filter);
+      setTab("transactions");
+      window.scrollTo({ top: 0 });
+    },
+    // Accounts with purchases open their history; balance-only accounts (e.g. a loan) open their settings.
+    account: (a: Account) => (accountsWithTx.has(a.id) ? nav.transactions({ accountId: a.id }) : goTo(`accounts#acct-${a.id}`)),
   };
 
   const empty = !data.classified.length;
@@ -83,9 +109,9 @@ export default function App() {
         {empty && tab !== "accounts" && tab !== "learn" && tab !== "categories" ? (
           <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
         ) : tab === "overview" ? (
-          <Overview summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} goTo={goTo} />
+          <Overview data={data} summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
         ) : tab === "transactions" ? (
-          <Transactions data={data} month={month} />
+          <Transactions key={JSON.stringify(txFilter)} data={data} month={month} filter={txFilter} />
         ) : tab === "insights" ? (
           <Insights summary={summary} tips={tips} recurring={recurring} score={score} goTo={goTo} />
         ) : tab === "categories" ? (

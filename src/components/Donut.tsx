@@ -28,7 +28,18 @@ export function toSlices(values: Partial<Record<CategoryId, number>>): Slice[] {
   return slices;
 }
 
-export function Donut({ slices, centerLabel, centerValue }: { slices: Slice[]; centerLabel: string; centerValue: string }) {
+export function Donut({
+  slices,
+  centerLabel,
+  centerValue,
+  onSelect,
+}: {
+  slices: Slice[];
+  centerLabel: string;
+  centerValue: string;
+  /** Called with a category id when a slice or legend row is clicked. */
+  onSelect?: (id: CategoryId) => void;
+}) {
   const pal = usePalette();
   const total = slices.reduce((a, s) => a + s.value, 0);
   if (!slices.length) return <p className="muted empty">Nothing to show for this month yet.</p>;
@@ -49,7 +60,12 @@ export function Donut({ slices, centerLabel, centerValue }: { slices: Slice[]; c
               isAnimationActive={false}
             >
               {slices.map((s) => (
-                <Cell key={s.id} fill={pal.category(s.id)} />
+                <Cell
+                  key={s.id}
+                  fill={pal.category(s.id)}
+                  cursor={onSelect && s.id !== "other" ? "pointer" : undefined}
+                  onClick={() => onSelect && s.id !== "other" && onSelect(s.id)}
+                />
               ))}
             </Pie>
             <Tooltip
@@ -66,14 +82,25 @@ export function Donut({ slices, centerLabel, centerValue }: { slices: Slice[]; c
         </div>
       </div>
       <ul className="legend">
-        {slices.map((s) => (
-          <li key={s.id}>
-            <span className="swatch" style={{ background: pal.category(s.id) }} />
-            <span className="legend-label">{s.id === "other" ? s.label : `${categoryInfo(s.id).emoji} ${s.label}`}</span>
-            <span className="legend-value">{usd(s.value)}</span>
-            <span className="legend-pct muted">{Math.round((s.value / total) * 100)}%</span>
-          </li>
-        ))}
+        {slices.map((s) => {
+          const row = (
+            <>
+              <span className="swatch" style={{ background: pal.category(s.id) }} />
+              <span className="legend-label">{s.id === "other" ? s.label : `${categoryInfo(s.id).emoji} ${s.label}`}</span>
+              <span className="legend-value">{usd(s.value)}</span>
+              <span className="legend-pct muted">{Math.round((s.value / total) * 100)}%</span>
+            </>
+          );
+          return (
+            <li key={s.id}>
+              {onSelect && s.id !== "other" ? (
+                <button className="legend-row" onClick={() => onSelect(s.id)} aria-label={`See ${s.label} purchases`}>{row}</button>
+              ) : (
+                <div className="legend-row">{row}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

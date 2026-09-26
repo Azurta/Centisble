@@ -4,9 +4,26 @@ export interface Account {
   id: string;
   name: string;
   type: AccountType;
-  /** Where the account came from: a linked bank, a CSV import, or demo data. */
-  source: "plaid" | "import" | "demo";
+  /** Where the account came from: a linked bank, a CSV import, one you typed in, or demo data. */
+  source: "plaid" | "import" | "manual" | "demo";
+  /**
+   * Current balance as a positive number: money you have for checking/savings/cash,
+   * money you owe for credit cards and loans.
+   */
+  balance?: number;
+  /** Spendable right now (checking) or credit still available (cards), when the bank reports it. */
+  available?: number;
+  creditLimit?: number;
+  /** Interest rate, % per year (APR). Banks rarely report it, so you can enter it. */
+  apr?: number;
+  /** When the balance was last updated (ISO date-time). */
+  balanceAsOf?: string;
+  /** Hide from net worth and the home screen. */
+  hidden?: boolean;
 }
+
+/** Your edits to accounts that come from a bank (name, APR, hidden) — kept separate so a sync doesn't overwrite them. */
+export type AccountEdits = Record<string, Partial<Pick<Account, "name" | "apr" | "hidden" | "type">>>;
 
 /**
  * How a transaction affects your real money.

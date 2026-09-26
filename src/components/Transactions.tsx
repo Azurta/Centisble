@@ -13,20 +13,42 @@ const KIND_LABEL: Record<TxKind, string> = {
   savings: "Saved",
 };
 
-export function Transactions({ data, month }: { data: AppData; month: string }) {
+/** What the list is narrowed to when you arrive from the home screen (e.g. tapping "Income" or a pie slice). */
+export interface TxFilter {
+  category?: CategoryId;
+  view?: "spending" | "income" | "interest";
+  accountId?: string;
+}
+
+const VIEW_KINDS: Record<NonNullable<TxFilter["view"]>, TxKind[]> = {
+  spending: ["expense", "interest", "refund"],
+  income: ["income"],
+  interest: ["interest"],
+};
+
+export function Transactions({ data, month, filter = {} }: { data: AppData; month: string; filter?: TxFilter }) {
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState<CategoryId | "">("");
+  const [cat, setCat] = useState<CategoryId | "">(filter.category ?? "");
+  const [view, setView] = useState<TxFilter["view"] | "">(filter.view ?? "");
+  const [accountId, setAccountId] = useState(filter.accountId ?? "");
   const [showTransfers, setShowTransfers] = useState(true);
   const [remember, setRemember] = useState(true);
   const accountName = useMemo(() => new Map(data.accounts.map((a) => [a.id, a.name])), [data.accounts]);
+  const accountsWithTx = useMemo(() => {
+    const ids = new Set(data.classified.map((t) => t.accountId));
+    return data.accounts.filter((a) => ids.has(a.id));
+  }, [data.accounts, data.classified]);
 
   const rows = data.classified.filter(
     (t) =>
-      t.date.startsWith(month) &&
+      // Looking at one account shows its whole history; otherwise just the selected month.
+      (accountId ? t.accountId === accountId : t.date.startsWith(month)) &&
       (!cat || t.category === cat) &&
+      (!view || VIEW_KINDS[view].includes(t.kind)) &&
       (showTransfers || t.kind !== "transfer") &&
       (!q || `${t.description} ${t.merchant ?? ""}`.toLowerCase().includes(q.toLowerCase())),
   );
+  const total = rows.reduce((a, t) => a + (t.kind === "transfer" || t.kind === "savings" ? 0 : t.amount), 0);
 
   return (
     <div className="stack">
@@ -34,13 +56,31 @@ export function Transactions({ data, month }: { data: AppData; month: string }) 
       <section className="card">
         <div className="filters">
           <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" />
+          <select value={view} onChange={(e) => setView(e.target.value as TxFilter["view"] | "")} aria-label="Show">
+            <option value="">Everything</option>
+            <option value="spending">Spending</option>
+            <option value="income">Income</option>
+            <option value="interest">Interest & fees</option>
+          </select>
           <select value={cat} onChange={(e) => setCat(e.target.value as CategoryId | "")} aria-label="Filter by category">
             <option value="">All categories</option>
             {allCategories().map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
           </select>
+          {accountsWithTx.length > 1 && (
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="Filter by account">
+              <option value="">All accounts (this month)</option>
+              {accountsWithTx.map((a) => <option key={a.id} value={a.id}>{a.name} (all time)</option>)}
+            </select>
+          )}
           <label className="check"><input type="checkbox" checked={showTransfers} onChange={(e) => setShowTransfers(e.target.checked)} /> Show card payments & transfers</label>
           <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember category for merchant</label>
         </div>
+        {(cat || view || accountId) && rows.length > 0 && (
+          <p className="small muted">
+            {rows.length} transaction{rows.length > 1 ? "s" : ""} · {view === "income" ? "received" : "net"} {usd(Math.abs(total), true)}{" "}
+            <button className="link small" onClick={() => { setCat(""); setView(""); setAccountId(""); }}>Clear filters</button>
+          </p>
+        )}
         {!rows.length ? (
           <p className="muted empty">No transactions this month. Connect a bank or import a CSV on the Accounts tab.</p>
         ) : (

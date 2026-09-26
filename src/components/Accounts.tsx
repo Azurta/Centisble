@@ -4,36 +4,17 @@ import { api } from "../api";
 import { parseBudgetWorkbook, readXlsx, type SheetImport } from "../lib/budgetSheet";
 import { guessMapping, looksNegative, parseCsv, rowsToTransactions, type CsvMapping } from "../lib/csv";
 import { saveJson } from "../lib/storage";
-import type { AccountType } from "../lib/types";
-import { usd, monthLabel } from "../format";
+import { isDebt } from "../lib/networth";
+import type { Account, AccountType } from "../lib/types";
+import { usd, monthLabel, pct } from "../format";
 import { STATIC, type AppData } from "../useAppData";
 
 export function Accounts({ data }: { data: AppData }) {
   return (
     <div className="grid">
       {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
-      <section className="card">
-        <h2>Your accounts</h2>
-        {!data.accounts.length ? (
-          <p className="muted">No accounts yet.</p>
-        ) : (
-          <ul className="list">
-            {data.accounts.map((a) => (
-              <li key={a.id}>
-                <span>{a.type === "credit" ? "💳" : a.type === "savings" ? "🐖" : a.type === "loan" ? "🏦" : "💵"} {a.name} <span className="muted small">{a.type} · {a.source}</span></span>
-                {a.source !== "plaid" && <button className="link small" onClick={() => data.removeAccount(a.id)}>Remove</button>}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="row">
-          {data.hasDemo ? (
-            <button className="btn secondary" onClick={data.clearDemo}>Remove demo data</button>
-          ) : (
-            <button className="btn secondary" onClick={data.loadDemo}>Load demo data</button>
-          )}
-        </div>
-      </section>
+      <AddAccount data={data} />
+      <YourAccounts data={data} />
       <details className="card wide more">
         <summary>Other ways to add purchases</summary>
         <p className="muted small">
@@ -282,5 +263,140 @@ function ImportSheets({ data }: { data: AppData }) {
       )}
       {msg && <p className="small">{msg}</p>}
     </section>
+  );
+}
+
+const TYPE_LABEL: Record<AccountType, string> = {
+  checking: "Checking / debit",
+  savings: "Savings / investments",
+  cash: "Cash",
+  credit: "Credit card",
+  loan: "Loan (student, car, personal…)",
+};
+const ICON: Record<AccountType, string> = { checking: "💵", savings: "🐖", cash: "💵", credit: "💳", loan: "🏦" };
+
+function YourAccounts({ data }: { data: AppData }) {
+  const accounts = data.accounts.filter((a) => a.source !== "import");
+  const assets = accounts.filter((a) => !isDebt(a));
+  const debts = accounts.filter(isDebt);
+  const owned = assets.filter((a) => !a.hidden).reduce((s, a) => s + (a.balance ?? 0), 0);
+  const owed = debts.filter((a) => !a.hidden).reduce((s, a) => s + (a.balance ?? 0), 0);
+  return (
+    <section className="card wide">
+      <div className="card-head">
+        <h2>Your accounts</h2>
+        {data.hasDemo ? (
+          <button className="link small" onClick={data.clearDemo}>Remove demo data</button>
+        ) : (
+          <button className="link small" onClick={data.loadDemo}>Load demo data</button>
+        )}
+      </div>
+      {!accounts.length && <p className="muted">No accounts yet. Connect your bank above, or add one by hand below.</p>}
+      <div className="acct-columns">
+        <div id="assets">
+          <div className="acct-group-head"><span className="eyebrow">You own</span><span className="small good">{usd(owned)}</span></div>
+          {assets.map((a) => <AccountEditor key={a.id} a={a} data={data} />)}
+          {!assets.length && <p className="muted small">Checking, savings, cash and investments show up here.</p>}
+        </div>
+        <div id="debts">
+          <div className="acct-group-head"><span className="eyebrow">You owe</span><span className="small bad">{usd(owed)}</span></div>
+          {debts.map((a) => <AccountEditor key={a.id} a={a} data={data} />)}
+          {!debts.length && <p className="muted small">Credit cards and loans show up here. Add student or car loans by hand if your bank connection doesn't include them.</p>}
+        </div>
+      </div>
+      <div className="nw-total">
+        <span>Net worth</span>
+        <strong className={owned - owed < 0 ? "bad" : "good"}>{usd(owned - owed)}</strong>
+      </div>
+    </section>
+  );
+}
+
+function AccountEditor({ a, data }: { a: Account; data: AppData }) {
+  const [open, setOpen] = useState(false);
+  const bankOwned = a.source === "plaid";
+  const num = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return (
+    <div id={`acct-${a.id}`} className={`acct-card ${a.hidden ? "off" : ""}`}>
+      <button className="acct-line" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="acct-name">{ICON[a.type]} {a.name}</span>
+        <span className="acct-bal">{a.balance != null ? usd(a.balance, true) : <span className="muted">no balance</span>}</span>
+      </button>
+      <div className="muted small acct-meta">
+        {a.apr != null && <span>{isDebt(a) ? `${a.apr}% APR` : `earns ${a.apr}%`}</span>}
+        {a.type === "credit" && a.creditLimit ? <span>{pct((a.balance ?? 0) / a.creditLimit)} of {usd(a.creditLimit)} limit</span> : null}
+        {a.type === "checking" && a.available != null && a.available !== a.balance && <span>{usd(a.available, true)} available</span>}
+        {a.balanceAsOf && <span>updated {new Date(a.balanceAsOf).toLocaleDateString()}</span>}
+        {a.hidden && <span>hidden</span>}
+      </div>
+      {open && (
+        <div className="form-grid mt-s">
+          <label>Name<input id={`acct-name-${a.id}`} value={a.name} onChange={(e) => data.updateAccount(a.id, { name: e.target.value })} /></label>
+          {!bankOwned && (
+            <label>
+              {isDebt(a) ? "Amount owed ($)" : "Balance ($)"}
+              <input id={`acct-bal-${a.id}`} inputMode="decimal" defaultValue={a.balance ?? ""} onBlur={(e) => data.updateAccount(a.id, { balance: num(e.target.value) })} />
+            </label>
+          )}
+          <label>
+            {isDebt(a) ? "Interest rate (APR %)" : "Interest earned (%)"}
+            <input id={`acct-apr-${a.id}`} inputMode="decimal" placeholder={isDebt(a) ? "e.g. 24.99" : "optional"} defaultValue={a.apr ?? ""} onBlur={(e) => data.updateAccount(a.id, { apr: num(e.target.value) })} />
+          </label>
+          {!bankOwned && a.type === "credit" && (
+            <label>
+              Credit limit ($)
+              <input id={`acct-limit-${a.id}`} inputMode="decimal" defaultValue={a.creditLimit ?? ""} onBlur={(e) => data.updateAccount(a.id, { creditLimit: num(e.target.value) })} />
+            </label>
+          )}
+          <div className="row span-2">
+            <label className="check">
+              <input type="checkbox" checked={!a.hidden} onChange={(e) => data.updateAccount(a.id, { hidden: !e.target.checked })} /> Count in net worth
+            </label>
+            {a.source !== "plaid" && <button className="link small bad" onClick={() => data.removeAccount(a.id)}>Remove account</button>}
+          </div>
+          {bankOwned && <p className="muted small span-2">The balance updates from your bank automatically.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddAccount({ data }: { data: AppData }) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState<AccountType>("loan");
+  const [balance, setBalance] = useState("");
+  const [apr, setApr] = useState("");
+  return (
+    <form
+      className="card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const b = parseFloat(balance);
+        if (!name.trim() || !Number.isFinite(b)) return;
+        const r = parseFloat(apr);
+        data.addManualAccount({ name: name.trim(), type, balance: b, apr: Number.isFinite(r) ? r : undefined });
+        setName("");
+        setBalance("");
+        setApr("");
+      }}
+    >
+      <h2>Add an account by hand</h2>
+      <p className="muted small">For balances your bank connection doesn't cover: a student loan, a car loan, cash, a 401(k).</p>
+      <div className="form-grid">
+        <label>Name<input id="add-acct-name" placeholder="e.g. Student loans" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label>
+          Type
+          <select id="add-acct-type" value={type} onChange={(e) => setType(e.target.value as AccountType)}>
+            {(Object.keys(TYPE_LABEL) as AccountType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+          </select>
+        </label>
+        <label>{type === "loan" || type === "credit" ? "Amount owed ($)" : "Balance ($)"}<input id="add-acct-balance" inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} /></label>
+        <label>{type === "loan" || type === "credit" ? "Interest rate (APR %)" : "Interest earned (%)"}<input id="add-acct-apr" inputMode="decimal" placeholder="optional" value={apr} onChange={(e) => setApr(e.target.value)} /></label>
+      </div>
+      <button className="btn mt-s" disabled={!name.trim() || !Number.isFinite(parseFloat(balance))}>Add account</button>
+    </form>
   );
 }

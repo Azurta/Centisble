@@ -4,7 +4,9 @@ import { DEFAULT_CATEGORIES, freeColorSlot, MISC_ID, newCategoryId, setCategorie
 import { classifyAll, merchantKey } from "./lib/classify";
 import { demoData } from "./lib/demo";
 import { loadJson, saveJson } from "./lib/storage";
-import type { Account, Budgets, CategoryId, Overrides, Transaction, TxKind } from "./lib/types";
+import { applyEdits } from "./lib/networth";
+import type { HomeWidget } from "./components/Overview";
+import type { Account, AccountEdits, Budgets, CategoryId, Overrides, Transaction, TxKind } from "./lib/types";
 
 /** Hosted build without the sync server: spreadsheets, CSVs and manual entries only. */
 export const STATIC = Boolean(import.meta.env.VITE_STATIC);
@@ -26,6 +28,8 @@ export function useAppData() {
   const [budgets, setBudgets] = usePersisted<Budgets>("azurta.budgets", {});
   const [categories, setCategoryList] = usePersisted<CategoryInfo[]>("azurta.categories", DEFAULT_CATEGORIES);
   /** Warn when a category reaches this share of its limit. */
+  const [homeLayout, setHomeLayout] = usePersisted<HomeWidget[]>("azurta.home", []);
+  const [accountEdits, setAccountEdits] = usePersisted<AccountEdits>("azurta.accountEdits", {});
   const [alertAt, setAlertAt] = usePersisted<number>("azurta.alertAt", 0.8);
   // The classifier and analytics read the active list from the categories module.
   setCategories(categories);
@@ -71,8 +75,8 @@ export function useAppData() {
   const accounts = useMemo(() => {
     const m = new Map<string, Account>();
     for (const a of [...local.accounts, ...server.accounts]) m.set(a.id, a);
-    return [...m.values()];
-  }, [local.accounts, server.accounts]);
+    return applyEdits([...m.values()], accountEdits);
+  }, [local.accounts, server.accounts, accountEdits]);
 
   const transactions = useMemo(() => {
     const m = new Map<string, Transaction>();
@@ -151,6 +155,24 @@ export function useAppData() {
       };
     });
 
+  /** Add a debt or asset the bank connection doesn't cover (e.g. a student loan, cash, a 401k). */
+  const addManualAccount = (a: Omit<Account, "id" | "source">) =>
+    setLocal((l) => ({
+      ...l,
+      accounts: [...l.accounts, { ...a, id: `manual-acct-${Date.now()}`, source: "manual", balanceAsOf: new Date().toISOString() }],
+    }));
+
+  /** Accounts you added can change anything; bank accounts keep your name/APR/hidden edits on the side so syncs don't erase them. */
+  const updateAccount = (id: string, patch: Partial<Account>) => {
+    const own = local.accounts.find((a) => a.id === id);
+    if (own && own.source !== "plaid") {
+      const stamp = patch.balance != null ? { balanceAsOf: new Date().toISOString() } : {};
+      setLocal((l) => ({ ...l, accounts: l.accounts.map((a) => (a.id === id ? { ...a, ...patch, ...stamp } : a)) }));
+    } else {
+      setAccountEdits((e) => ({ ...e, [id]: { ...e[id], ...patch } }));
+    }
+  };
+
   const removeAccount = (id: string) =>
     setLocal((l) => ({ accounts: l.accounts.filter((a) => a.id !== id), transactions: l.transactions.filter((t) => t.accountId !== id) }));
 
@@ -171,6 +193,7 @@ export function useAppData() {
 
   return {
     accounts, classified, overrides, budgets, setBudgets,
+    accountEdits, addManualAccount, updateAccount, homeLayout, setHomeLayout,
     categories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
     setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,

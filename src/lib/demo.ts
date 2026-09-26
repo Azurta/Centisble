@@ -2,10 +2,13 @@ import type { Account, Transaction } from "./types";
 
 /** A realistic 3-month history for a young adult who puts everything on a credit card. */
 export function demoData(today = new Date()): { accounts: Account[]; transactions: Transaction[] } {
+  const asOf = today.toISOString();
   const accounts: Account[] = [
-    { id: "demo-chk", name: "Everyday Checking ••1234", type: "checking", source: "demo" },
-    { id: "demo-sav", name: "High-Yield Savings ••8890", type: "savings", source: "demo" },
-    { id: "demo-cc", name: "Rewards Visa ••4421", type: "credit", source: "demo" },
+    { id: "demo-chk", name: "Everyday Checking ••1234", type: "checking", source: "demo", balance: 1240.55, available: 1240.55, balanceAsOf: asOf },
+    { id: "demo-sav", name: "High-Yield Savings ••8890", type: "savings", source: "demo", balance: 3100, apr: 4.1, balanceAsOf: asOf },
+    { id: "demo-cc", name: "Rewards Visa ••4421", type: "credit", source: "demo", balance: 612.4, creditLimit: 3000, apr: 24.99, balanceAsOf: asOf },
+    { id: "demo-student", name: "Student Loan (Nelnet)", type: "loan", source: "demo", balance: 18500, apr: 5.5, balanceAsOf: asOf },
+    { id: "demo-auto", name: "Auto Loan (Toyota Financial)", type: "loan", source: "demo", balance: 14200, apr: 7.4, balanceAsOf: asOf },
   ];
   let seed = 42;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

@@ -77,7 +77,17 @@ export async function syncItem(item: Item): Promise<number> {
   while (hasMore) {
     const { data } = await client.transactionsSync({ access_token: item.accessToken, cursor, count: 500 });
     for (const a of data.accounts) {
-      const acct: Account = { id: a.account_id, name: `${item.institution ?? "Bank"} ${a.name}${a.mask ? ` ••${a.mask}` : ""}`, type: accountType(a), source: "plaid" };
+      const acct: Account = {
+        id: a.account_id,
+        name: `${item.institution ?? "Bank"} ${a.name}${a.mask ? ` ••${a.mask}` : ""}`,
+        type: accountType(a),
+        source: "plaid",
+        // Plaid reports what you owe on cards/loans as a positive `current` balance, same as our convention.
+        balance: a.balances.current ?? undefined,
+        available: a.balances.available ?? undefined,
+        creditLimit: a.balances.limit ?? undefined,
+        balanceAsOf: new Date().toISOString(),
+      };
       db.accounts = db.accounts.filter((x) => x.id !== acct.id).concat(acct);
     }
     for (const t of [...data.added, ...data.modified]) {
