@@ -44,9 +44,9 @@ export function usePalette() {
     },
     series: slots,
     other: OTHER,
-    grid: dark ? "#2c2c2a" : "#e1e0d9",
-    axis: dark ? "#383835" : "#c3c2b7",
-    muted: "#898781",
-    surface: dark ? "#1a1a19" : "#fcfcfb",
+    grid: dark ? "#232e3c" : "#eaecf0",
+    axis: dark ? "#334155" : "#d0d5dd",
+    muted: dark ? "#8b95a5" : "#667085",
+    surface: dark ? "#121821" : "#ffffff",
   };
 }

@@ -64,7 +64,7 @@ export function Transactions({ data, month, filter = {} }: { data: AppData; mont
           </select>
           <select value={cat} onChange={(e) => setCat(e.target.value as CategoryId | "")} aria-label="Filter by category">
             <option value="">All categories</option>
-            {allCategories().map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+            {allCategories().map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
           {accountsWithTx.length > 1 && (
             <select value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="Filter by account">
@@ -118,7 +118,7 @@ function Row({ t, data, remember, account }: { t: ClassifiedTransaction; data: A
           aria-label="Category"
           onChange={(e) => data.setCategory(t, e.target.value as CategoryId, remember)}
         >
-          {allCategories().map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+          {allCategories().map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
         {data.overrides.kind[t.id] || data.overrides.category[t.id] ? null : excluded ? (
           <button className="link small" onClick={() => data.setKind(t.id, "expense")}>Count as spending</button>
@@ -155,7 +155,7 @@ function AddManual({ onAdd }: { onAdd: AppData["addManual"] }) {
       <input placeholder="What was it?" value={desc} onChange={(e) => setDesc(e.target.value)} aria-label="Description" />
       <input placeholder="Amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" />
       <select value={category} onChange={(e) => setCategory(e.target.value as CategoryId)} aria-label="Category">
-        {allCategories().filter((c) => c.bucket !== "none").map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
+        {allCategories().filter((c) => c.bucket !== "none").map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
       </select>
       <button className="btn">Add</button>
       <button type="button" className="link" onClick={() => setOpen(false)}>Close</button>

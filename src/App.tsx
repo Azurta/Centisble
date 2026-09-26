@@ -10,19 +10,19 @@ import { monthLabel } from "./format";
 import { findRecurring, monthsIn, moneyScore, savingTips, summarize, trend } from "./lib/analytics";
 import { categoryInfo } from "./lib/categories";
 import { limitStatuses, newlyCrossed, type LimitStatus } from "./lib/limits";
-import { netWorth } from "./lib/networth";
+import { isDebt, netWorth } from "./lib/networth";
 import type { Account } from "./lib/types";
 import type { Nav } from "./components/Overview";
 import { usd } from "./format";
 import { useAppData } from "./useAppData";
 
 const TABS = [
-  { id: "overview", label: "Overview", icon: "📊" },
-  { id: "transactions", label: "Transactions", icon: "🧾" },
-  { id: "insights", label: "Save", icon: "💡" },
-  { id: "categories", label: "Categories & Limits", icon: "🎯" },
-  { id: "learn", label: "Learn", icon: "🎓" },
-  { id: "accounts", label: "Accounts", icon: "🏦" },
+  { id: "overview", label: "Overview" },
+  { id: "transactions", label: "Transactions" },
+  { id: "insights", label: "Savings" },
+  { id: "categories", label: "Budgets" },
+  { id: "learn", label: "Learn" },
+  { id: "accounts", label: "Accounts" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -77,31 +77,40 @@ export default function App() {
       setTab("transactions");
       window.scrollTo({ top: 0 });
     },
-    // Accounts with purchases open their history; balance-only accounts (e.g. a loan) open their settings.
-    account: (a: Account) => (accountsWithTx.has(a.id) ? nav.transactions({ accountId: a.id }) : goTo(`accounts#acct-${a.id}`)),
+    // Debts open their payoff plan; other accounts open their purchase history when they have one.
+    account: (a: Account) =>
+      !isDebt(a) && accountsWithTx.has(a.id) ? nav.transactions({ accountId: a.id }) : goTo(`accounts#acct-${a.id}`),
   };
 
   const empty = !data.classified.length;
 
   return (
-    <div className="app">
-      <header className="top">
-        <div className="brand">
-          <span className="logo" aria-hidden>◆</span> {APP_NAME}
+    <div className="shell">
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <svg className="logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+              <rect x="2" y="12" width="4" height="10" rx="1" />
+              <rect x="10" y="7" width="4" height="15" rx="1" />
+              <rect x="18" y="2" width="4" height="20" rx="1" />
+            </svg>
+            {APP_NAME}
+          </div>
+          {!empty && (
+            <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          )}
         </div>
-        {!empty && (
-          <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
-            {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-          </select>
-        )}
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map((t) => (
+            <button key={t.id} className={tab === t.id ? "active" : ""} aria-current={tab === t.id ? "page" : undefined} onClick={() => goTo(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </header>
-      <nav className="tabs" aria-label="Sections">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? "active" : ""} aria-current={tab === t.id ? "page" : undefined} onClick={() => goTo(t.id)}>
-            <span aria-hidden>{t.icon}</span> {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="app">
       <main>
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
@@ -119,9 +128,10 @@ export default function App() {
         ) : tab === "learn" ? (
           <Learn data={data} focus={lessonFocus} />
         ) : (
-          <Accounts data={data} />
+          <Accounts key={anchor} data={data} focus={anchor} />
         )}
       </main>
+      </div>
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
@@ -157,8 +167,8 @@ function useLimitAlerts(current: LimitStatus[]): string | null {
       .map((s) => {
         const c = categoryInfo(s.id);
         return s.state === "over"
-          ? `⛔ ${c.label} is over its ${usd(s.limit ?? 0)} limit by ${usd(s.spent - (s.limit ?? 0))}.`
-          : `⚠️ ${c.label}: ${Math.round(s.used * 100)}% of the limit used, ${usd(s.left)} left.`;
+          ? `${c.label} is over its ${usd(s.limit ?? 0)} limit by ${usd(s.spent - (s.limit ?? 0))}.`
+          : `${c.label}: ${Math.round(s.used * 100)}% of the limit used, ${usd(s.left)} left.`;
       })
       .join(" ");
     setToast(msg);

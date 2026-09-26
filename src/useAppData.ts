@@ -5,6 +5,7 @@ import { classifyAll, merchantKey } from "./lib/classify";
 import { demoData } from "./lib/demo";
 import { loadJson, saveJson } from "./lib/storage";
 import { applyEdits } from "./lib/networth";
+import type { SheetBalance } from "./lib/budgetSheet";
 import type { HomeWidget } from "./components/Overview";
 import type { Account, AccountEdits, Budgets, CategoryId, Overrides, Transaction, TxKind } from "./lib/types";
 
@@ -143,12 +144,28 @@ export function useAppData() {
     });
 
   /** Re-importing a month's sheet replaces that month's rows, so edits in the sheet carry over. */
-  const importSheetMonths = (months: { month: string; transactions: Transaction[] }[]) =>
+  const importSheetMonths = (months: { month: string; transactions: Transaction[]; balances?: SheetBalance[] }[]) =>
     setLocal((l) => {
       const prefixes = months.map((m) => `sheet-${m.month}-`);
       const account: Account = { id: "sheet-budget", name: "Budget spreadsheets", type: "cash", source: "import" };
+      // Balances come from the most recent month that lists any; they become editable accounts.
+      const latest = [...months].sort((a, b) => b.month.localeCompare(a.month)).find((m) => m.balances?.length);
+      const balanceAccounts: Account[] = (latest?.balances ?? []).map((b) => {
+        const id = `sheet-bal-${b.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        const existing = l.accounts.find((a) => a.id === id);
+        return {
+          ...existing,
+          id,
+          name: existing?.name ?? b.name,
+          type: b.type,
+          source: "manual",
+          balance: b.balance,
+          balanceAsOf: `${latest!.month}-28T12:00:00Z`,
+        };
+      });
+      const replaced = new Set([account.id, ...balanceAccounts.map((a) => a.id)]);
       return {
-        accounts: l.accounts.filter((a) => a.id !== account.id).concat(account),
+        accounts: l.accounts.filter((a) => !replaced.has(a.id)).concat(account, balanceAccounts),
         transactions: l.transactions
           .filter((t) => !prefixes.some((p) => t.id.startsWith(p)))
           .concat(months.flatMap((m) => m.transactions)),

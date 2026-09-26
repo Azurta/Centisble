@@ -29,6 +29,14 @@ export interface SheetImport {
   tables: string[];
   /** Monthly goals from the sheet's summary table (Category | Actual | Goal). */
   goals: Budgets;
+  /** Balances listed in the sheet: the Debt block (what you owe) and the Savings "Amount in". */
+  balances: SheetBalance[];
+}
+
+export interface SheetBalance {
+  name: string;
+  type: "credit" | "loan" | "savings";
+  balance: number;
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -150,6 +158,33 @@ function summaryGoals(sheet: SheetGrid): Budgets {
   return goals;
 }
 
+/** "Debt"/"Dept" block (label + balance rows) and the Savings block's "Amount in", both in columns A–B. */
+function blockBalances(sheet: SheetGrid): SheetBalance[] {
+  const out: SheetBalance[] = [];
+  const colA = (i: number) => text(sheet.rows[i]?.[0] ?? null);
+  for (let r = 0; r < sheet.rows.length; r++) {
+    const label = colA(r);
+    // A block header has no amount next to it; the summary table's "Debt | 2,629.79 | 400" row does.
+    if (/^(debt|dept)$/i.test(label) && num(sheet.rows[r][1] ?? null) == null) {
+      for (let i = r + 1; i < sheet.rows.length; i++) {
+        const name = colA(i);
+        if (/^(income|savings)$/i.test(name)) break;
+        if (!name || /^(goal|actual)$/i.test(name)) continue;
+        const bal = num(sheet.rows[i][1] ?? null);
+        if (bal == null) continue;
+        out.push({ name, type: CARD_ISSUERS.test(name) ? "credit" : "loan", balance: bal });
+      }
+    }
+    if (/^savings$/i.test(label)) {
+      for (let i = r + 1; i < Math.min(r + 6, sheet.rows.length); i++) {
+        const bal = num(sheet.rows[i][1] ?? null);
+        if (/^amount in$/i.test(colA(i)) && bal != null) out.push({ name: "Savings", type: "savings", balance: bal });
+      }
+    }
+  }
+  return out;
+}
+
 export function parseBudgetWorkbook(fileName: string, sheets: SheetGrid[], today = new Date()): SheetImport {
   const month = inferMonth(fileName, sheets, today);
   const txs: Transaction[] = [];
@@ -215,7 +250,8 @@ export function parseBudgetWorkbook(fileName: string, sheets: SheetGrid[], today
 
   const sum = (k: TxKind) => txs.filter((t) => t.sheetKind === k).reduce((a, t) => a + Math.abs(t.amount), 0);
   const goals = sheets.reduce<Budgets>((g, sh) => ({ ...summaryGoals(sh), ...g }), {});
-  return { fileName, month, goals, transactions: txs, income: sum("income"), expenses: sum("expense"), cardPayments: sum("transfer"), saved: sum("savings"), tables };
+  const balances = sheets.flatMap(blockBalances);
+  return { fileName, month, goals, balances, transactions: txs, income: sum("income"), expenses: sum("expense"), cardPayments: sum("transfer"), saved: sum("savings"), tables };
 }
 
 /** Load an .xlsx file in the browser (exceljs is loaded on demand — it's large). */

@@ -33,7 +33,7 @@ export function Categories({ data, summary, history, statuses }: Props) {
       <section className="card">
         <div className="card-head">
           <h2>Categories & limits</h2>
-          <button className="btn secondary" onClick={suggest} disabled={!history.length}>✨ Fill empty limits from my history</button>
+          <button className="btn secondary" onClick={suggest} disabled={!history.length}>Fill empty limits from history</button>
         </div>
         <p className="muted small">
           Give each category a monthly limit. For “want” categories you'll get a warning when you reach{" "}
@@ -73,10 +73,10 @@ function CategoryRow({ c, status, data, showPerDay }: { c: CategoryInfo; status?
     <section className={`card cat ${state}`}>
       <div className="cat-head">
         <span className="swatch" style={{ background: pal.category(c.id) }} aria-hidden />
-        <strong className="cat-name">{c.emoji} {c.label}</strong>
+        <strong className="cat-name">{c.label}</strong>
         <span className="muted small">{c.bucket === "needs" ? "Need" : "Want"}</span>
         {(state === "warn" || state === "over") && (
-          <span className={`chip ${state}`}>{state === "over" ? "⛔" : "⚠️"} {STATE_LABEL[state]}</span>
+          <span className={`chip ${state}`}>{STATE_LABEL[state]}</span>
         )}
         <label className="budget-input">
           <span className="muted small">Limit</span> $
@@ -126,7 +126,6 @@ function CategoryRow({ c, status, data, showPerDay }: { c: CategoryInfo; status?
       {editing && (
         <div className="form-grid mt-s">
           <label>Name<input id={`name-${c.id}`} value={c.label} onChange={(e) => data.updateCategory(c.id, { label: e.target.value })} /></label>
-          <label>Icon<input id={`emoji-${c.id}`} value={c.emoji} maxLength={4} onChange={(e) => data.updateCategory(c.id, { emoji: e.target.value })} /></label>
           <label>
             Type
             <select id={`bucket-${c.id}`} value={c.bucket} onChange={(e) => data.updateCategory(c.id, { bucket: e.target.value as Bucket })}>
@@ -153,7 +152,6 @@ const splitWords = (s: string) => s.split(",").map((w) => w.trim()).filter(Boole
 
 function AddCategory({ data }: { data: AppData }) {
   const [label, setLabel] = useState("");
-  const [emoji, setEmoji] = useState("🏷️");
   const [bucket, setBucket] = useState<Bucket>("wants");
   const [limit, setLimit] = useState("");
   const [words, setWords] = useState("");
@@ -164,7 +162,7 @@ function AddCategory({ data }: { data: AppData }) {
         e.preventDefault();
         if (!label.trim()) return;
         const n = parseFloat(limit);
-        data.addCategory({ label: label.trim(), emoji: emoji || "🏷️", bucket, keywords: splitWords(words) }, Number.isFinite(n) && n > 0 ? n : undefined);
+        data.addCategory({ label: label.trim(), emoji: "", bucket, keywords: splitWords(words) }, Number.isFinite(n) && n > 0 ? n : undefined);
         setLabel("");
         setLimit("");
         setWords("");
@@ -173,7 +171,6 @@ function AddCategory({ data }: { data: AppData }) {
       <h2>Add a category</h2>
       <div className="form-grid">
         <label>Name<input id="new-cat-name" placeholder="e.g. Coffee" value={label} onChange={(e) => setLabel(e.target.value)} /></label>
-        <label>Icon<input id="new-cat-emoji" value={emoji} maxLength={4} onChange={(e) => setEmoji(e.target.value)} /></label>
         <label>
           Type
           <select id="new-cat-bucket" value={bucket} onChange={(e) => setBucket(e.target.value as Bucket)}>

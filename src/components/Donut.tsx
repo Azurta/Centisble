@@ -86,7 +86,7 @@ export function Donut({
           const row = (
             <>
               <span className="swatch" style={{ background: pal.category(s.id) }} />
-              <span className="legend-label">{s.id === "other" ? s.label : `${categoryInfo(s.id).emoji} ${s.label}`}</span>
+              <span className="legend-label">{s.label}</span>
               <span className="legend-value">{usd(s.value)}</span>
               <span className="legend-pct muted">{Math.round((s.value / total) * 100)}%</span>
             </>

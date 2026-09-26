@@ -12,7 +12,8 @@ rows[4] = ["Expenses", 4000, 5500];
 rows[5] = ["Food & Groceries", 413, 300];
 rows[6] = ["Eating Out", 377, 220];
 rows[7] = ["Savings", 200, 1500];
-rows[8] = ["Net Total", -1111];
+rows[8] = ["Debt", 2629.79, 400];
+rows[9] = ["Net Total", -1111];
 rows[17] = ["Income", "Income", "Expenses"];
 rows[18] = ["Goal", 5000, "Goal"];
 rows[19] = ["Actual", 3000, "Actual"];
@@ -28,7 +29,9 @@ rows[28] = [null, null, d("2026-08-30"), "Piano", 1, 200, "Shopping", "Savings",
 rows[39] = ["Savings", "Savings"];
 rows[40] = ["Amount in", 1100.86];
 rows[51] = ["Debt", "Debt"];
+rows[52] = ["Goal", 0];
 rows[53] = ["Discover", 818.18];
+rows[54] = ["Car loan", 12000];
 const main: SheetGrid = { name: "Visuals", rows: Array.from(rows, (r) => r ?? []) };
 
 const tab: SheetGrid = {
@@ -46,7 +49,12 @@ describe("budget sheet import", () => {
     const gas = r.transactions.find((t) => t.description === "Gas")!;
     expect(gas.date).toBe("2026-08-05"); // undated rows take the previous row's date
     expect(gas.paidWith).toBe("Discover");
-    expect(r.goals).toEqual({ groceries: 300, going_out: 220 });
+    expect(r.goals).toEqual({ groceries: 300, going_out: 220, debt: 400 });
+    expect(r.balances).toEqual([
+      { name: "Savings", type: "savings", balance: 1100.86 },
+      { name: "Discover", type: "credit", balance: 818.18 },
+      { name: "Car loan", type: "loan", balance: 12000 },
+    ]);
   });
 
   it("does not count card payments as spending", () => {

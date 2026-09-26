@@ -172,7 +172,7 @@ export function savingTips(all: ClassifiedTransaction[], s: MonthSummary, budget
     if (limit && spent > limit)
       tips.push({
         id: `over-${c.id}`, severity: c.bucket === "wants" ? "serious" : "warning", monthly: spent - limit, category: c.id,
-        title: `${c.emoji} ${c.label} is ${fmt(spent - limit)} over its limit`,
+        title: `${c.label} is ${fmt(spent - limit)} over its limit`,
         detail: `You spent ${fmt(spent)} against a ${fmt(limit)} limit.`,
       });
   }
@@ -231,7 +231,7 @@ export function savingTips(all: ClassifiedTransaction[], s: MonthSummary, budget
   if (!tips.length)
     tips.push({
       id: "great", severity: "good", monthly: 0, lesson: "investing-101",
-      title: "No leaks found this month 🎉",
+      title: "No leaks found this month",
       detail: "You're under your limits, saving 20%+, and paying no interest. Next step: invest what you save.",
     });
 

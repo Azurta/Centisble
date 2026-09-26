@@ -78,7 +78,7 @@ export function Overview(props: Props) {
     <div className="stack">
       <div className="home-bar">
         <button className="link small" onClick={() => setCustomizing((c) => !c)} aria-expanded={customizing}>
-          {customizing ? "Done" : "⚙️ Customize home"}
+          {customizing ? "Done" : "Customize"}
         </button>
       </div>
       {customizing && <Customize layout={layout} onChange={data.setHomeLayout} />}
@@ -253,13 +253,13 @@ function AccountGroup({ title, total, tone, children }: { title: string; total: 
   );
 }
 
-const ACCOUNT_ICON: Record<string, string> = { checking: "💵", savings: "🐖", cash: "💵", credit: "💳", loan: "🏦" };
+const TYPE_SHORT: Record<string, string> = { checking: "Checking", savings: "Savings", cash: "Cash", credit: "Credit card", loan: "Loan" };
 
 function AccountLine({ a, onClick }: { a: Account; onClick: () => void }) {
   return (
     <li>
       <button className="acct-line" onClick={onClick}>
-        <span className="acct-name">{ACCOUNT_ICON[a.type]} {a.name}</span>
+        <span className="acct-name">{a.name}<span className="acct-type">{TYPE_SHORT[a.type]}</span></span>
         <span className="acct-bal">{usd(a.balance ?? 0, true)}</span>
       </button>
     </li>
@@ -282,8 +282,17 @@ function DebtWidget({ nw, nav }: Props) {
         </div>
         <div>
           <span className="muted small">Interest if unpaid</span>
-          <strong className="bad">{usd(nw.monthlyInterest)}/mo</strong>
-          <span className="muted small">{usd(nw.monthlyInterest * 12)}/yr</span>
+          {missingApr.length === nw.debts.length ? (
+            <>
+              <strong className="muted">—</strong>
+              <span className="muted small">add interest rates</span>
+            </>
+          ) : (
+            <>
+              <strong className="bad">{usd(nw.monthlyInterest)}/mo</strong>
+              <span className="muted small">{usd(nw.monthlyInterest * 12)}/yr{missingApr.length ? `, ${missingApr.length} without a rate` : ""}</span>
+            </>
+          )}
         </div>
       </div>
       <div className="table-wrap">
@@ -303,7 +312,10 @@ function DebtWidget({ nw, nav }: Props) {
                 </td>
                 <td className="num">{usd(d.balance)}</td>
                 <td className="num">{d.apr != null ? `${d.apr}%` : <span className="muted">add</span>}</td>
-                <td className="num">{d.monthlyInterest != null ? usd(d.monthlyInterest, true) : "—"}</td>
+                <td className="num">
+                  {d.monthlyInterest != null ? usd(d.monthlyInterest, true) : "—"}
+                  <div className="small link-text">Pay off ›</div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -406,7 +418,7 @@ function LimitAlerts({ statuses, nav }: { statuses: LimitStatus[]; nav: Nav }) {
       {!withLimit.length ? (
         <p className="muted small">Set a monthly limit on categories like Eating Out or Alcohol and you'll be warned before you go over.</p>
       ) : !flagged.length ? (
-        <p className="small good">✓ All {withLimit.length} limits on track.</p>
+        <p className="small good">All {withLimit.length} limits on track.</p>
       ) : (
         <div className="alerts">
           {flagged.map((x) => {
@@ -414,7 +426,7 @@ function LimitAlerts({ statuses, nav }: { statuses: LimitStatus[]; nav: Nav }) {
             return (
               <button key={x.id} className={`alert ${x.state}`} onClick={() => nav.transactions({ category: x.id })}>
                 <span>
-                  {x.state === "over" ? "⛔" : "⚠️"} <strong>{c.emoji} {c.label}</strong>: {usd(x.spent)} of {usd(x.limit ?? 0)}
+                  <span className={`dot ${x.state === "over" ? "critical" : "warning"}`} aria-hidden /> <strong>{c.label}</strong>: {usd(x.spent)} of {usd(x.limit ?? 0)}
                 </span>
                 <span className="small nowrap">
                   {x.state === "over" ? <span className="bad">{usd(-x.left)} over</span> : <>{usd(x.perDay)}/day left</>}
@@ -426,7 +438,7 @@ function LimitAlerts({ statuses, nav }: { statuses: LimitStatus[]; nav: Nav }) {
       )}
       {!STATIC && perm === "default" && (
         <button className="link small mt-s" onClick={async () => setPerm(await Notification.requestPermission())}>
-          🔔 Also alert me on this device when a purchase gets close to a limit
+          Also alert me on this device when a purchase gets close to a limit
         </button>
       )}
     </section>

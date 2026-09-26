@@ -5,6 +5,7 @@ const pick = (re) => [...html.matchAll(re)].map((m) => m[0]).join("\n");
 const out = [
   pick(/<title>[\s\S]*?<\/title>/g),
   pick(/<meta name="theme-color"[^>]*>/g),
+  pick(/<link rel="(?:preconnect|stylesheet)" href="https:\/\/fonts[^>]*>/g),
   pick(/<style[\s\S]*?<\/style>/g),
   '<div id="root"></div>',
   pick(/<script type="module"[\s\S]*?<\/script>/g),

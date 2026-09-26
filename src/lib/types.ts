@@ -20,10 +20,14 @@ export interface Account {
   balanceAsOf?: string;
   /** Hide from net worth and the home screen. */
   hidden?: boolean;
+  /** Debts: the monthly amount you plan to pay, for the payoff plan. */
+  plannedPayment?: number;
+  /** Debts: where you pay it (your lender's website or app link). */
+  payUrl?: string;
 }
 
 /** Your edits to accounts that come from a bank (name, APR, hidden) — kept separate so a sync doesn't overwrite them. */
-export type AccountEdits = Record<string, Partial<Pick<Account, "name" | "apr" | "hidden" | "type">>>;
+export type AccountEdits = Record<string, Partial<Pick<Account, "name" | "apr" | "hidden" | "type" | "plannedPayment" | "payUrl">>>;
 
 /**
  * How a transaction affects your real money.

@@ -5,16 +5,18 @@ import { parseBudgetWorkbook, readXlsx, type SheetImport } from "../lib/budgetSh
 import { guessMapping, looksNegative, parseCsv, rowsToTransactions, type CsvMapping } from "../lib/csv";
 import { saveJson } from "../lib/storage";
 import { isDebt } from "../lib/networth";
+import { paymentFor, paymentSite, payoffPlan } from "../lib/payoff";
 import type { Account, AccountType } from "../lib/types";
 import { usd, monthLabel, pct } from "../format";
 import { STATIC, type AppData } from "../useAppData";
 
-export function Accounts({ data }: { data: AppData }) {
+/** `focus` is an element id such as "acct-<id>" (open that account) or "debts". */
+export function Accounts({ data, focus }: { data: AppData; focus?: string }) {
   return (
     <div className="grid">
       {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
       <AddAccount data={data} />
-      <YourAccounts data={data} />
+      <YourAccounts data={data} focus={focus} />
       <details className="card wide more">
         <summary>Other ways to add purchases</summary>
         <p className="muted small">
@@ -76,7 +78,7 @@ function ConnectBank({ data }: { data: AppData }) {
           <div className="row">
             <button className="btn" onClick={async () => {
               try { setLinkToken((await api.linkToken()).linkToken); } catch (e) { setMsg((e as Error).message); }
-            }}>🔗 Connect an account</button>
+            }}>Connect an account</button>
             {!!status?.institutions.length && <button className="btn secondary" onClick={async () => { const r = await api.sync(); setMsg(`${r.changed} updates`); data.refresh(); }}>↻ Sync now</button>}
           </div>
           {status && (
@@ -88,7 +90,7 @@ function ConnectBank({ data }: { data: AppData }) {
           <ul className="list">
             {status?.institutions.map((i) => (
               <li key={i.itemId}>
-                <span>🏦 {i.institution ?? "Bank"} <span className="muted small">{i.lastSync ? `synced ${new Date(i.lastSync).toLocaleString()}` : ""}</span></span>
+                <span>{i.institution ?? "Bank"} <span className="muted small">{i.lastSync ? `synced ${new Date(i.lastSync).toLocaleString()}` : ""}</span></span>
                 <button className="link small" onClick={async () => { await api.unlink(i.itemId); data.refresh(); }}>Unlink</button>
               </li>
             ))}
@@ -273,9 +275,9 @@ const TYPE_LABEL: Record<AccountType, string> = {
   credit: "Credit card",
   loan: "Loan (student, car, personal…)",
 };
-const ICON: Record<AccountType, string> = { checking: "💵", savings: "🐖", cash: "💵", credit: "💳", loan: "🏦" };
+const TYPE_SHORT: Record<AccountType, string> = { checking: "Checking", savings: "Savings", cash: "Cash", credit: "Credit card", loan: "Loan" };
 
-function YourAccounts({ data }: { data: AppData }) {
+function YourAccounts({ data, focus }: { data: AppData; focus?: string }) {
   const accounts = data.accounts.filter((a) => a.source !== "import");
   const assets = accounts.filter((a) => !isDebt(a));
   const debts = accounts.filter(isDebt);
@@ -295,12 +297,12 @@ function YourAccounts({ data }: { data: AppData }) {
       <div className="acct-columns">
         <div id="assets">
           <div className="acct-group-head"><span className="eyebrow">You own</span><span className="small good">{usd(owned)}</span></div>
-          {assets.map((a) => <AccountEditor key={a.id} a={a} data={data} />)}
+          {assets.map((a) => <AccountEditor key={a.id} a={a} data={data} startOpen={focus === `acct-${a.id}`} />)}
           {!assets.length && <p className="muted small">Checking, savings, cash and investments show up here.</p>}
         </div>
         <div id="debts">
           <div className="acct-group-head"><span className="eyebrow">You owe</span><span className="small bad">{usd(owed)}</span></div>
-          {debts.map((a) => <AccountEditor key={a.id} a={a} data={data} />)}
+          {debts.map((a) => <AccountEditor key={a.id} a={a} data={data} startOpen={focus === `acct-${a.id}`} />)}
           {!debts.length && <p className="muted small">Credit cards and loans show up here. Add student or car loans by hand if your bank connection doesn't include them.</p>}
         </div>
       </div>
@@ -312,8 +314,8 @@ function YourAccounts({ data }: { data: AppData }) {
   );
 }
 
-function AccountEditor({ a, data }: { a: Account; data: AppData }) {
-  const [open, setOpen] = useState(false);
+function AccountEditor({ a, data, startOpen }: { a: Account; data: AppData; startOpen?: boolean }) {
+  const [open, setOpen] = useState(Boolean(startOpen));
   const bankOwned = a.source === "plaid";
   const num = (v: string) => {
     const n = parseFloat(v);
@@ -322,7 +324,7 @@ function AccountEditor({ a, data }: { a: Account; data: AppData }) {
   return (
     <div id={`acct-${a.id}`} className={`acct-card ${a.hidden ? "off" : ""}`}>
       <button className="acct-line" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="acct-name">{ICON[a.type]} {a.name}</span>
+        <span className="acct-name">{a.name}<span className="acct-type">{TYPE_SHORT[a.type]}</span></span>
         <span className="acct-bal">{a.balance != null ? usd(a.balance, true) : <span className="muted">no balance</span>}</span>
       </button>
       <div className="muted small acct-meta">
@@ -360,6 +362,7 @@ function AccountEditor({ a, data }: { a: Account; data: AppData }) {
           {bankOwned && <p className="muted small span-2">The balance updates from your bank automatically.</p>}
         </div>
       )}
+      {open && isDebt(a) && <PayoffPanel a={a} data={data} />}
     </div>
   );
 }
@@ -398,5 +401,81 @@ function AddAccount({ data }: { data: AppData }) {
       </div>
       <button className="btn mt-s" disabled={!name.trim() || !Number.isFinite(parseFloat(balance))}>Add account</button>
     </form>
+  );
+}
+
+function PayoffPanel({ a, data }: { a: Account; data: AppData }) {
+  const balance = a.balance ?? 0;
+  const apr = a.apr;
+  const site = paymentSite(a.name, a.payUrl);
+  const payment = a.plannedPayment;
+  const plan = payment && apr != null ? payoffPlan(balance, apr, payment) : undefined;
+  const monthLabelOf = (ym: string) => monthLabel(ym);
+  return (
+    <div className="payoff">
+      <div className="payoff-head">
+        <h3>Pay it off</h3>
+        {site ? (
+          <a className="btn" href={site} target="_blank" rel="noreferrer">Make a payment ↗</a>
+        ) : (
+          <span className="muted small">Add a payment link below</span>
+        )}
+      </div>
+      {a.type === "credit" && (
+        <p className="small">Pay the full statement balance by the due date and this card costs $0 in interest.</p>
+      )}
+      {apr == null ? (
+        <p className="muted small">Add the interest rate above to see how long payoff takes and what it costs.</p>
+      ) : balance > 0 ? (
+        <>
+          <div className="payoff-options">
+            {[6, 12, 24, 36].filter((m) => a.type !== "credit" || m <= 24).map((m) => {
+              const p = paymentFor(balance, apr, m);
+              return (
+                <button key={m} className={`option ${payment && Math.abs(payment - p) < 0.5 ? "on" : ""}`} onClick={() => data.updateAccount(a.id, { plannedPayment: Math.ceil(p) })}>
+                  <span className="muted small">Debt-free in {m} mo</span>
+                  <strong>{usd(Math.ceil(p))}/mo</strong>
+                </button>
+              );
+            })}
+          </div>
+          <label className="payoff-input">
+            My monthly payment ($)
+            <input
+              id={`pay-${a.id}`}
+              key={payment}
+              inputMode="decimal"
+              defaultValue={payment ?? ""}
+              placeholder="e.g. 300"
+              onBlur={(e) => {
+                const n = parseFloat(e.target.value);
+                data.updateAccount(a.id, { plannedPayment: Number.isFinite(n) && n > 0 ? n : undefined });
+              }}
+            />
+          </label>
+          {payment ? (
+            plan ? (
+              <p className="small">
+                Paid off in <strong>{plan.months} month{plan.months === 1 ? "" : "s"}</strong> ({monthLabelOf(plan.paidOffBy)}), with{" "}
+                <strong>{usd(plan.totalInterest)}</strong> in interest along the way.
+              </p>
+            ) : (
+              <p className="small bad">{usd(payment)}/mo doesn't cover the interest ({usd((balance * apr) / 1200, true)}/mo). The balance would keep growing.</p>
+            )
+          ) : null}
+        </>
+      ) : (
+        <p className="small good">Paid off.</p>
+      )}
+      <label className="payoff-input">
+        Payment website or app link
+        <input
+          id={`payurl-${a.id}`}
+          placeholder={site ?? "e.g. mohela.studentaid.gov"}
+          defaultValue={a.payUrl ?? ""}
+          onBlur={(e) => data.updateAccount(a.id, { payUrl: e.target.value.trim() || undefined })}
+        />
+      </label>
+    </div>
   );
 }

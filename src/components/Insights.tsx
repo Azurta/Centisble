@@ -60,7 +60,7 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
                     <strong>{b.label}</strong>
                     <span>
                       {pct(share)} <span className="muted">/ goal {pct(b.target)}</span>{" "}
-                      <span className={ok ? "good" : "bad"}>{ok ? "✓ on track" : "✗ off track"}</span>
+                      <span className={ok ? "good" : "bad"}>{ok ? "On track" : "Off track"}</span>
                     </span>
                   </div>
                   <div className="bar-track" title={`${usd(b.actual)} of ${usd(s.income)}`}>
@@ -82,7 +82,7 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
             <li key={t.id} className={`tip ${t.severity}`}>
               <div className="tip-body">
                 <strong>
-                  <span className="sev" aria-hidden>{t.severity === "critical" ? "⛔" : t.severity === "serious" ? "⚠️" : t.severity === "warning" ? "💡" : "✅"}</span> {t.title}
+                  <span className={`dot ${t.severity}`} aria-hidden /> {t.title}
                 </strong>
                 <p>{t.detail}</p>
                 {t.lesson && (
@@ -124,7 +124,7 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
             <ul className="list">
               {recurring.map((r) => (
                 <li key={r.key}>
-                  <span>{categoryInfo(r.category).emoji} {r.label}</span>
+                  <span>{r.label} <span className="muted small">{categoryInfo(r.category).label}</span></span>
                   <span>{usd(r.monthly, true)}/mo</span>
                 </li>
               ))}

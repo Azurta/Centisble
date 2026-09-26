@@ -7,7 +7,7 @@ export function Learn({ data, focus }: { data: AppData; focus?: string }) {
   return (
     <div className="stack">
       <section className="card">
-        <h2>Learn to save 🎓</h2>
+        <h2>Learn to save</h2>
         <p className="muted">
           {done.size}/{LESSONS.length} lessons complete. Each lesson you pass adds +2 to your Money Score (up to +10). Watch the videos, then answer
           the quick check to complete it.
@@ -35,7 +35,7 @@ function LessonCard({ lesson: l, done, focus, onDone }: { lesson: Lesson; done: 
   return (
     <article ref={ref} className={`card lesson ${done ? "done" : ""} ${focus ? "focus" : ""}`}>
       <div className="card-head">
-        <h3>{done ? "✅ " : ""}{l.title}</h3>
+        <h3>{l.title}{done && <span className="chip done">Completed</span>}</h3>
         <span className="muted small">{l.minutes} min</span>
       </div>
       <p>{l.summary}</p>
