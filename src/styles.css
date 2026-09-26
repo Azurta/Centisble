@@ -418,3 +418,37 @@ details.more[open] > summary { margin-bottom: 12px; }
 .link-text { color: var(--accent); font-weight: 500; }
 .form-grid label.check { flex-direction: row; align-items: center; color: var(--text); }
 .home-bar { justify-content: flex-end; }
+.unlock { max-width: 420px; margin: 48px auto; display: grid; gap: 12px; }
+.unlock h1 { font-size: 24px; margin: 0; }
+
+/* Drag to reorder */
+.drag-handle {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; padding: 0;
+  background: none; border: 0; border-radius: 4px; cursor: grab; touch-action: none; color: var(--muted);
+}
+.drag-handle svg { fill: currentColor; }
+.drag-handle:hover { color: var(--text); background: var(--surface-2); }
+.sortable.dragging, .sortable.dragging * { cursor: grabbing; user-select: none; }
+.sortable-item { min-width: 0; transition: transform 120ms ease; }
+.sortable-item.is-dragging { position: relative; z-index: 2; opacity: 0.9; }
+.sortable-item.is-dragging > * { box-shadow: 0 8px 24px rgba(16, 24, 40, 0.16); border-color: var(--accent); }
+.customize { display: grid; gap: 4px; margin: 8px 0 12px; }
+.customize .sortable-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-s); border: 1px solid var(--border); background: var(--surface); }
+.customize .sortable-item.off { opacity: 0.55; }
+.cat-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cat-list .sortable-item { display: flex; }
+.cat-list .sortable-item > .card { flex: 1; }
+
+/* Edit panels slide open */
+@keyframes slide-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.cat .form-grid, .acct-card .form-grid, .payoff, .customize-panel { animation: slide-open 160ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .cat .form-grid, .acct-card .form-grid, .payoff, .customize-panel, .sortable-item { animation: none; transition: none; }
+}
+@media (max-width: 760px) {
+  .cat-list { grid-template-columns: minmax(0, 1fr); }
+}
+.due { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.due > div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 8px 10px; }
+.due dt { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.due dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }

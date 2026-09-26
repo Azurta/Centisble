@@ -10,6 +10,7 @@ import type { Account } from "../lib/types";
 import { STATIC, type AppData } from "../useAppData";
 import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
+import { Sortable } from "./Sortable";
 import type { TxFilter } from "./Transactions";
 
 /* ------------------------------------------------------------------ */
@@ -95,36 +96,32 @@ export function Overview(props: Props) {
 }
 
 function Customize({ layout, onChange }: { layout: HomeWidget[]; onChange: (l: HomeWidget[]) => void }) {
-  const move = (i: number, d: -1 | 1) => {
-    const next = [...layout];
-    [next[i], next[i + d]] = [next[i + d], next[i]];
-    onChange(next);
-  };
+  const def = (w: HomeWidget) => WIDGETS.find((x) => x.id === w.id)!;
   return (
-    <section className="card">
+    <section className="card customize-panel">
       <h2>Customize your home screen</h2>
-      <p className="muted small">Show, hide and reorder sections. On a phone they stack in this order; on a computer, half-width sections sit side by side.</p>
-      <ol className="customize">
-        {layout.map((w, i) => {
-          const def = WIDGETS.find((x) => x.id === w.id)!;
-          return (
-            <li key={w.id} className={w.hidden ? "off" : ""}>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={!w.hidden}
-                  onChange={(e) => onChange(layout.map((x) => (x.id === w.id ? { ...x, hidden: !e.target.checked } : x)))}
-                />
-                {def.label}
-              </label>
-              <span className="order">
-                <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${def.label} up`}>↑</button>
-                <button className="icon-btn" disabled={i === layout.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${def.label} down`}>↓</button>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <p className="muted small">Drag sections by the handle to reorder them, and untick any you don't want. On a computer, half-width sections sit side by side.</p>
+      <Sortable
+        className="customize"
+        items={layout}
+        getId={(w) => w.id}
+        label={(w) => def(w).label}
+        onReorder={onChange}
+        itemClassName={(w) => (w.hidden ? "off" : "")}
+        render={(w, handle) => (
+          <>
+            {handle}
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!w.hidden}
+                onChange={(e) => onChange(layout.map((x) => (x.id === w.id ? { ...x, hidden: !e.target.checked } : x)))}
+              />
+              {def(w).label}
+            </label>
+          </>
+        )}
+      />
       <button className="link small" onClick={() => onChange(WIDGETS.map((w) => ({ id: w.id })))}>Reset to default</button>
     </section>
   );
@@ -309,6 +306,12 @@ function DebtWidget({ nw, nav }: Props) {
                     <div className={`small ${d.utilization > 0.3 ? "bad" : "muted"}`}>{pct(d.utilization)} of limit used</div>
                   )}
                   {d.chargedThisMonth > 0 && <div className="small bad">{usd(d.chargedThisMonth, true)} charged this month</div>}
+                  {d.account.nextDue && (
+                    <div className="small muted">
+                      Due {shortDate(d.account.nextDue)}
+                      {d.account.minPayment != null && <> · min {usd(d.account.minPayment, true)}</>}
+                    </div>
+                  )}
                 </td>
                 <td className="num">{usd(d.balance)}</td>
                 <td className="num">{d.apr != null ? `${d.apr}%` : <span className="muted">add</span>}</td>
@@ -330,6 +333,9 @@ function DebtWidget({ nw, nav }: Props) {
     </section>
   );
 }
+
+const shortDate = (ymd: string) =>
+  new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 function ScoreWidget({ score, tips, nav }: Props) {
   return (

@@ -1,0 +1,30 @@
+# One-click hosting on Render (https://render.com): New → Blueprint → pick this repo.
+# You'll be asked for your Plaid keys; APP_TOKEN (your app password) is generated for you —
+# find it under the service's Environment tab.
+services:
+  - type: web
+    name: centsible
+    runtime: node
+    plan: starter # the persistent disk below needs a paid instance
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: PLAID_ENV
+        value: production
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: APP_TOKEN
+        generateValue: true
+      - key: POLL_MINUTES
+        value: "30"
+    disk:
+      name: centsible-data
+      mountPath: /var/data
+      sizeGB: 1

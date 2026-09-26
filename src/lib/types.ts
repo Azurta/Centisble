@@ -20,6 +20,10 @@ export interface Account {
   balanceAsOf?: string;
   /** Hide from net worth and the home screen. */
   hidden?: boolean;
+  /** Debts, from the bank when available: minimum payment, next due date (YYYY-MM-DD), last statement balance. */
+  minPayment?: number;
+  nextDue?: string;
+  statementBalance?: number;
   /** Debts: the monthly amount you plan to pay, for the payoff plan. */
   plannedPayment?: number;
   /** Debts: where you pay it (your lender's website or app link). */

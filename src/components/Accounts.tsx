@@ -31,29 +31,61 @@ export function Accounts({ data, focus }: { data: AppData; focus?: string }) {
   );
 }
 
-function ConnectBank({ data }: { data: AppData }) {
-  const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [token, setToken] = useState("");
-  const { status, serverError } = data;
+const LINK_TOKEN_KEY = "centsible.linkToken";
 
+/**
+ * Opens Plaid Link. Banks that log you in on their own site (Chase, Capital One…) either use a pop-up, or,
+ * when PLAID_REDIRECT_URI is set, send you back here with ?oauth_state_id=…; then Link is resumed with the same token.
+ */
+function usePlaid(data: AppData, setMsg: (m: string) => void) {
+  const resuming = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("oauth_state_id");
+  const [linkToken, setLinkToken] = useState<string | null>(() => {
+    if (!resuming) return null;
+    try {
+      return sessionStorage.getItem(LINK_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  });
   const { open, ready } = usePlaidLink({
     token: linkToken,
+    receivedRedirectUri: resuming ? window.location.href : undefined,
     onSuccess: async (publicToken, meta) => {
+      if (resuming) window.history.replaceState(null, "", window.location.pathname);
       if (!publicToken) return;
       setMsg("Importing transactions…");
       try {
         const r = await api.exchange(publicToken, meta.institution?.name);
-        setMsg(`Connected ${meta.institution?.name ?? "bank"} — ${r.changed} transactions imported.`);
+        setMsg(`Connected ${meta.institution?.name ?? "bank"}: ${r.changed} transactions imported.`);
         data.refresh();
       } catch (e) {
         setMsg(`Could not connect: ${(e as Error).message}`);
       }
     },
+    onExit: () => {
+      if (resuming) window.history.replaceState(null, "", window.location.pathname);
+    },
   });
   useEffect(() => {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
+  const start = async () => {
+    const t = (await api.linkToken()).linkToken;
+    try {
+      sessionStorage.setItem(LINK_TOKEN_KEY, t);
+    } catch {
+      /* redirect-style bank logins won't resume, pop-ups still work */
+    }
+    setLinkToken(t);
+  };
+  return start;
+}
+
+function ConnectBank({ data }: { data: AppData }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+  const { status, serverError } = data;
+  const startLink = usePlaid(data, setMsg);
 
   return (
     <section className="card">
@@ -77,7 +109,7 @@ function ConnectBank({ data }: { data: AppData }) {
         <>
           <div className="row">
             <button className="btn" onClick={async () => {
-              try { setLinkToken((await api.linkToken()).linkToken); } catch (e) { setMsg((e as Error).message); }
+              try { await startLink(); } catch (e) { setMsg((e as Error).message); }
             }}>Connect an account</button>
             {!!status?.institutions.length && <button className="btn secondary" onClick={async () => { const r = await api.sync(); setMsg(`${r.changed} updates`); data.refresh(); }}>↻ Sync now</button>}
           </div>
@@ -421,8 +453,17 @@ function PayoffPanel({ a, data }: { a: Account; data: AppData }) {
           <span className="muted small">Add a payment link below</span>
         )}
       </div>
+      {(a.nextDue || a.minPayment != null || a.statementBalance != null) && (
+        <dl className="due">
+          {a.nextDue && <div><dt>Next due</dt><dd>{new Date(`${a.nextDue}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</dd></div>}
+          {a.minPayment != null && <div><dt>Minimum</dt><dd>{usd(a.minPayment, true)}</dd></div>}
+          {a.statementBalance != null && <div><dt>Statement balance</dt><dd>{usd(a.statementBalance, true)}</dd></div>}
+        </dl>
+      )}
       {a.type === "credit" && (
-        <p className="small">Pay the full statement balance by the due date and this card costs $0 in interest.</p>
+        <p className="small">
+          Pay the full statement balance{a.statementBalance != null ? ` (${usd(a.statementBalance, true)})` : ""} by the due date and this card costs $0 in interest.
+        </p>
       )}
       {apr == null ? (
         <p className="muted small">Add the interest rate above to see how long payoff takes and what it costs.</p>

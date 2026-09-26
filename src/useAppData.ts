@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type ServerStatus } from "./api";
 import { DEFAULT_CATEGORIES, freeColorSlot, MISC_ID, newCategoryId, setCategories, type CategoryInfo } from "./lib/categories";
 import { classifyAll, merchantKey } from "./lib/classify";
@@ -55,6 +55,57 @@ export function useAppData() {
     }
   }, []);
 
+  /* ---- Settings shared across devices (stored on your server) ---- */
+  const settings = { local, overrides, budgets, categories, alertAt, accountEdits, homeLayout, lessonsDone, videos };
+  const settingsJson = JSON.stringify(settings);
+  const lastSynced = useRef<string | null>(null);
+  const [settingsReady, setSettingsReady] = useState(false);
+
+  const pullSettings = useCallback(async () => {
+    const { settings: remote } = await api.getSettings();
+    if (!remote) return false;
+    const r = remote as Partial<typeof settings>;
+    if (r.local) setLocal(r.local);
+    if (r.overrides) setOverrides(r.overrides);
+    if (r.budgets) setBudgets(r.budgets);
+    if (r.categories) setCategoryList(r.categories);
+    if (r.alertAt != null) setAlertAt(r.alertAt);
+    if (r.accountEdits) setAccountEdits(r.accountEdits);
+    if (r.homeLayout) setHomeLayout(r.homeLayout);
+    if (r.lessonsDone) setLessonsDone(r.lessonsDone);
+    if (r.videos) setVideos(r.videos);
+    lastSynced.current = JSON.stringify({ ...settings, ...r });
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsJson]);
+
+  // First contact with the server: take its settings, or seed it with this device's.
+  useEffect(() => {
+    if (STATIC || !status || settingsReady) return;
+    pullSettings()
+      .then(async (had) => {
+        if (!had) {
+          await api.putSettings(settings);
+          lastSynced.current = settingsJson;
+        }
+        setSettingsReady(true);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, settingsReady]);
+
+  // After that, save changes (debounced). Skips echoes of what we just loaded.
+  useEffect(() => {
+    if (!settingsReady || settingsJson === lastSynced.current) return;
+    const t = setTimeout(() => {
+      api.putSettings(JSON.parse(settingsJson)).then(() => (lastSynced.current = settingsJson)).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [settingsJson, settingsReady]);
+
+  const pullRef = useRef(pullSettings);
+  pullRef.current = pullSettings;
+
   // Live updates pushed from the server whenever the bank reports a new purchase.
   useEffect(() => {
     if (STATIC) return;
@@ -63,6 +114,8 @@ export function useAppData() {
     try {
       es = api.events();
       es.addEventListener("transactions", () => refresh());
+      // Another device changed settings.
+      es.addEventListener("settings", () => pullRef.current().catch(() => {}));
     } catch {
       /* no server */
     }
@@ -111,6 +164,8 @@ export function useAppData() {
     });
     if (limit) setBudgets((b) => ({ ...b, [id]: limit }));
   };
+
+  const reorderCategories = (list: CategoryInfo[]) => setCategoryList(list);
 
   const updateCategory = (id: string, patch: Partial<CategoryInfo>) =>
     setCategoryList((list) => list.map((c) => (c.id === id ? { ...c, ...patch, id } : c)));
@@ -211,7 +266,7 @@ export function useAppData() {
   return {
     accounts, classified, overrides, budgets, setBudgets,
     accountEdits, addManualAccount, updateAccount, homeLayout, setHomeLayout,
-    categories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
+    categories, reorderCategories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
     setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,
     hasDemo: local.accounts.some((a) => a.source === "demo"),

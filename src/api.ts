@@ -27,5 +27,8 @@ export const api = {
     call<{ changed: number }>("/api/link/exchange", { method: "POST", body: JSON.stringify({ publicToken, institution }) }),
   sync: () => call<{ changed: number }>("/api/sync", { method: "POST" }),
   unlink: (itemId: string) => call<{ ok: boolean }>(`/api/items/${itemId}`, { method: "DELETE" }),
+  getSettings: () => call<{ settings: Record<string, unknown> | null; updatedAt: string | null }>("/api/settings"),
+  putSettings: (settings: Record<string, unknown>) =>
+    call<{ ok: boolean }>("/api/settings", { method: "PUT", body: JSON.stringify({ settings }) }),
   events: () => new EventSource(`/api/events?token=${encodeURIComponent(appToken())}`),
 };

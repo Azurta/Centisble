@@ -8,12 +8,17 @@ export interface Item {
   institution?: string;
   cursor?: string;
   lastSync?: string;
+  /** When interest rates / due dates were last fetched (they change rarely, so at most twice a day). */
+  liabilitiesAt?: string;
 }
 
 interface Db {
   items: Item[];
   accounts: Account[];
   transactions: Transaction[];
+  /** App settings (categories, limits, edits, home layout…) shared by every device you open the app on. */
+  settings?: Record<string, unknown>;
+  settingsUpdatedAt?: string;
 }
 
 const file = path.resolve(process.env.DATA_DIR ?? "data", "db.json");

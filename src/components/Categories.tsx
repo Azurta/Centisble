@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Sortable } from "./Sortable";
 import { usePalette } from "../colors";
 import { usd } from "../format";
 import { suggestBudgets, type MonthSummary } from "../lib/analytics";
@@ -36,7 +37,7 @@ export function Categories({ data, summary, history, statuses }: Props) {
           <button className="btn secondary" onClick={suggest} disabled={!history.length}>Fill empty limits from history</button>
         </div>
         <p className="muted small">
-          Give each category a monthly limit. For “want” categories you'll get a warning when you reach{" "}
+          Drag categories by the handle to put them in your own order. Give each category a monthly limit. For “want” categories you'll get a warning when you reach{" "}
           <select id="alert-at" aria-label="Warn at" value={data.alertAt} onChange={(e) => data.setAlertAt(Number(e.target.value))}>
             {[0.5, 0.6, 0.7, 0.75, 0.8, 0.9].map((v) => <option key={v} value={v}>{Math.round(v * 100)}%</option>)}
           </select>{" "}
@@ -49,18 +50,21 @@ export function Categories({ data, summary, history, statuses }: Props) {
         </p>
       </section>
 
-      <div className="cat-list">
-        {categories.map((c) => (
-          <CategoryRow key={c.id} c={c} status={byId.get(c.id)} data={data} showPerDay={days > 0} />
-        ))}
-      </div>
+      <Sortable
+        className="cat-list"
+        items={categories}
+        getId={(c) => c.id}
+        label={(c) => c.label}
+        onReorder={data.reorderCategories}
+        render={(c, handle) => <CategoryRow c={c} status={byId.get(c.id)} data={data} showPerDay={days > 0} handle={handle} />}
+      />
 
       <AddCategory data={data} />
     </div>
   );
 }
 
-function CategoryRow({ c, status, data, showPerDay }: { c: CategoryInfo; status?: LimitStatus; data: AppData; showPerDay: boolean }) {
+function CategoryRow({ c, status, data, showPerDay, handle }: { c: CategoryInfo; status?: LimitStatus; data: AppData; showPerDay: boolean; handle: ReactNode }) {
   const pal = usePalette();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -72,6 +76,7 @@ function CategoryRow({ c, status, data, showPerDay }: { c: CategoryInfo; status?
   return (
     <section className={`card cat ${state}`}>
       <div className="cat-head">
+        {handle}
         <span className="swatch" style={{ background: pal.category(c.id) }} aria-hidden />
         <strong className="cat-name">{c.label}</strong>
         <span className="muted small">{c.bucket === "needs" ? "Need" : "Want"}</span>

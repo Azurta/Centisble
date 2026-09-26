@@ -1,3 +1,4 @@
+import { saveJson } from "./lib/storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_NAME } from "./brand";
 import { Accounts } from "./components/Accounts";
@@ -28,7 +29,8 @@ type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
   const data = useAppData();
-  const [tab, setTab] = useState<Tab>("overview");
+  // Coming back from a bank's own login page: reopen Accounts so the connection can finish.
+  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).has("oauth_state_id") ? "accounts" : "overview"));
   const [lessonFocus, setLessonFocus] = useState<string>();
   const months = useMemo(() => monthsIn(data.classified), [data.classified]);
   const [month, setMonth] = useState<string>("");
@@ -83,6 +85,7 @@ export default function App() {
   };
 
   const empty = !data.classified.length;
+  if (data.serverError === "unauthorized") return <Unlock onUnlock={data.refresh} />;
 
   return (
     <div className="shell">
@@ -133,6 +136,36 @@ export default function App() {
       </main>
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+/** Your hosted app asks for its password (APP_TOKEN) once per device. */
+function Unlock({ onUnlock }: { onUnlock: () => void }) {
+  const [value, setValue] = useState("");
+  const [tried, setTried] = useState(false);
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <div className="topbar-inner"><div className="brand">{APP_NAME}</div></div>
+      </header>
+      <div className="app">
+        <form
+          className="card unlock"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveJson("azurta.token", value);
+            setTried(true);
+            onUnlock();
+          }}
+        >
+          <h1>Unlock {APP_NAME}</h1>
+          <p className="muted">Enter the app password (the APP_TOKEN you set on your server). This device will remember it.</p>
+          <input id="unlock-token" type="password" autoComplete="current-password" value={value} onChange={(e) => setValue(e.target.value)} aria-label="App password" />
+          {tried && <p className="small bad">That password didn't work. Check APP_TOKEN on your server.</p>}
+          <button className="btn" disabled={!value}>Unlock</button>
+        </form>
+      </div>
     </div>
   );
 }

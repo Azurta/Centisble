@@ -2,11 +2,16 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import type { Response } from "express";
-import { createLinkToken, exchangePublicToken, plaidConfigured, syncAll, syncItem } from "./plaid";
+import { createLinkToken, exchangePublicToken, plaidConfigured, syncAll, syncItem, webhookUrl } from "./plaid";
 import { db, save } from "./store";
 
+if (process.env.NODE_ENV === "production" && !process.env.APP_TOKEN) {
+  console.error("Refusing to start: set APP_TOKEN (a long random password) so only you can open your finances.");
+  process.exit(1);
+}
+
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 /*
  * Optional shared secret. Set APP_TOKEN whenever the server is reachable from the internet
@@ -14,7 +19,7 @@ app.use(express.json());
  */
 app.use("/api", (req, res, next) => {
   const token = process.env.APP_TOKEN;
-  if (!token || req.path === "/plaid/webhook") return next();
+  if (!token || req.path === "/plaid/webhook" || req.path === "/health") return next();
   if (req.get("x-app-token") === token || req.query.token === token) return next();
   res.status(401).json({ error: "unauthorized" });
 });
@@ -32,17 +37,33 @@ app.get("/api/events", (req, res) => {
   req.on("close", () => clients.delete(res));
 });
 
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
 app.get("/api/status", (_req, res) => {
   res.json({
     plaidConfigured,
     env: process.env.PLAID_ENV ?? "sandbox",
-    webhook: Boolean(process.env.PLAID_WEBHOOK_URL),
+    webhook: Boolean(webhookUrl()),
     institutions: db.items.map((i) => ({ itemId: i.itemId, institution: i.institution, lastSync: i.lastSync })),
   });
 });
 
 app.get("/api/transactions", (_req, res) => {
   res.json({ accounts: db.accounts, transactions: db.transactions });
+});
+
+/* Settings (categories, limits, edits, home layout…) live on the server so your phone and computer match. */
+app.get("/api/settings", (_req, res) => {
+  res.json({ settings: db.settings ?? null, updatedAt: db.settingsUpdatedAt ?? null });
+});
+app.put("/api/settings", (req, res) => {
+  const settings = req.body?.settings;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return res.status(400).json({ error: "settings must be an object" });
+  db.settings = settings;
+  db.settingsUpdatedAt = new Date().toISOString();
+  save();
+  broadcast("settings", { updatedAt: db.settingsUpdatedAt });
+  res.json({ ok: true, updatedAt: db.settingsUpdatedAt });
 });
 
 app.post("/api/link/token", async (_req, res) => {
