@@ -1,13 +1,30 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import path from "node:path";
-import type { Response } from "express";
-import { createLinkToken, exchangePublicToken, plaidConfigured, syncAll, syncItem, webhookUrl } from "./plaid";
+import {
+  changePassword,
+  clearFailures,
+  deleteUser,
+  endSession,
+  loadUser,
+  login,
+  publicUser,
+  recordFailure,
+  requireUser,
+  resetMemberPassword,
+  rotateInvite,
+  signup,
+  startSession,
+  tooManyAttempts,
+} from "./auth";
+import { decryptSecret, encryptSecret, openExport, sealExport, type SealedExport } from "./crypto";
+import { createLinkToken, exchangePublicToken, plaidConfigured, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
+import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { claimSetupToken, syncSimplefin } from "./simplefin";
-import { db, save } from "./store";
+import { findItem, save, store, userData, type Item, type UserData } from "./store";
 
-if (process.env.NODE_ENV === "production" && !process.env.APP_TOKEN) {
-  console.error("Refusing to start: set APP_TOKEN (a long random password) so only you can open your finances.");
+if (process.env.NODE_ENV === "production" && !process.env.DATA_KEY && !process.env.APP_TOKEN) {
+  console.error("Refusing to start: set DATA_KEY (a long random value) so stored bank connections are encrypted.");
   process.exit(1);
 }
 
@@ -18,69 +35,168 @@ function plaidError(e: unknown): string {
   return `${d.error_code}: ${d.display_message ?? d.error_message ?? ""}`.trim();
 }
 
+/** How many Plaid connections the plan allows (Trial: 10 created in total, across everyone). */
+const PLAID_ITEM_LIMIT = Number(process.env.PLAID_ITEM_LIMIT ?? 10);
+
 const app = express();
-app.use(express.json({ limit: "5mb" }));
+app.set("trust proxy", 1); // behind Render's proxy: real client IPs and HTTPS
+app.use(express.json({ limit: "10mb" }));
+app.use(loadUser);
 
 /*
- * Optional shared secret. Set APP_TOKEN whenever the server is reachable from the internet
- * (e.g. through ngrok for Plaid webhooks) so nobody else can read your transactions.
+ * Cross-site request protection: cookies are SameSite=Lax, and every state-changing API call must be JSON
+ * (a plain HTML form on another site can't send that without the browser asking first).
  */
 app.use("/api", (req, res, next) => {
-  const token = process.env.APP_TOKEN;
-  if (!token || req.path === "/plaid/webhook" || req.path === "/health") return next();
-  if (req.get("x-app-token") === token || req.query.token === token) return next();
-  res.status(401).json({ error: "unauthorized" });
+  if (req.method === "GET" || req.path === "/plaid/webhook") return next();
+  // Checks the header itself: bodyless calls (e.g. DELETE) still send it, and other sites can't without a preflight.
+  if (!req.get("content-type")?.toLowerCase().startsWith("application/json")) return res.status(415).json({ error: "JSON required" });
+  next();
 });
 
-/* Live updates: browsers keep an SSE connection open and refresh when new transactions land. */
-const clients = new Set<Response>();
-function broadcast(event: string, data: unknown) {
-  for (const res of clients) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+/* ---- Live updates, per person ---- */
+const clients = new Map<string, Set<Response>>();
+function broadcast(userId: string, event: string, data: unknown) {
+  for (const res of clients.get(userId) ?? []) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
-app.get("/api/events", (req, res) => {
+app.get("/api/events", requireUser, (req, res) => {
+  const id = req.user!.id;
   res.set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
   res.flushHeaders();
   res.write("retry: 5000\n\n");
-  clients.add(res);
-  req.on("close", () => clients.delete(res));
+  const set = clients.get(id) ?? clients.set(id, new Set()).get(id)!;
+  set.add(res);
+  req.on("close", () => set.delete(res));
 });
+
+/** After new data: tell that person's open screens, and check limits for phone notifications. */
+async function afterSync(userId: string, ud: UserData, changed: number) {
+  if (!changed) return;
+  broadcast(userId, "transactions", { changed });
+  await checkLimits(userId, ud).catch((e) => console.error("[push]", e));
+}
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-app.get("/api/status", (_req, res) => {
+/* ---- Accounts ---- */
+app.get("/api/auth/me", (req, res) => {
+  const u = req.user;
+  res.json({
+    user: u ? publicUser(u) : null,
+    // Lets the sign-in screen offer "create the first account" on a brand-new server.
+    firstRun: store.users.length === 0,
+    invite: u?.role === "owner" ? store.inviteCode : undefined,
+    members: u?.role === "owner" ? store.users.map(publicUser) : undefined,
+  });
+});
+
+app.post("/api/auth/signup", (req, res) => {
+  const key = `signup:${req.ip}`;
+  if (tooManyAttempts(key)) return res.status(429).json({ error: "Too many attempts. Try again in 15 minutes." });
+  const r = signup(req.body ?? {});
+  if (!r.ok) {
+    if (r.status === 403) recordFailure(key);
+    return res.status(r.status).json({ error: r.error });
+  }
+  startSession(res, r.user.id);
+  res.json({ user: publicUser(r.user) });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const key = `login:${req.ip}:${String(req.body?.email ?? "").toLowerCase()}`;
+  if (tooManyAttempts(key)) return res.status(429).json({ error: "Too many attempts. Try again in 15 minutes." });
+  const user = login(req.body ?? {});
+  if (!user) {
+    recordFailure(key);
+    return res.status(401).json({ error: "Email or password is incorrect." });
+  }
+  clearFailures(key);
+  startSession(res, user.id);
+  res.json({ user: publicUser(user) });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  endSession(req, res);
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/password", requireUser, (req, res) => {
+  const err = changePassword(req.user!, String(req.body?.current ?? ""), String(req.body?.next ?? ""));
+  if (err) return res.status(400).json({ error: err });
+  res.json({ ok: true });
+});
+
+const requireOwner = (req: Request, res: Response, next: () => void) =>
+  req.user?.role === "owner" ? next() : res.status(403).json({ error: "Only the owner can do that." });
+
+app.post("/api/auth/invite/rotate", requireUser, requireOwner, (_req, res) => res.json({ invite: rotateInvite() }));
+
+app.post("/api/auth/members/:id/password", requireUser, requireOwner, (req, res) => {
+  const err = resetMemberPassword(String(req.params.id), String(req.body?.password ?? ""));
+  if (err) return res.status(400).json({ error: err });
+  res.json({ ok: true });
+});
+
+/** Delete your account: disconnects your banks at Plaid and erases everything stored for you. */
+app.post("/api/auth/delete", requireUser, async (req, res) => {
+  const u = req.user!;
+  if (!login({ email: u.email, password: String(req.body?.password ?? "") })) return res.status(401).json({ error: "Password is incorrect." });
+  const ud = userData(u.id);
+  await Promise.all(ud.items.map(removeItem));
+  deleteUser(u.id);
+  endSession(req, res);
+  res.json({ ok: true });
+});
+
+/* Everything below is your own data only. */
+app.use("/api", (req, res, next) => (req.path === "/plaid/webhook" ? next() : requireUser(req, res, next)));
+const mine = (req: Request) => userData(req.user!.id);
+
+app.get("/api/status", (req, res) => {
+  const ud = mine(req);
   res.json({
     plaidConfigured,
     env: process.env.PLAID_ENV ?? "sandbox",
     webhook: Boolean(webhookUrl()),
-    institutions: db.items.map((i) => ({ itemId: i.itemId, institution: i.institution, lastSync: i.lastSync })),
-    simplefin: db.simplefin
-      ? { connected: true, lastSync: db.simplefin.lastSync, institutions: db.simplefin.institutions ?? [], errors: db.simplefin.errors ?? [] }
+    institutions: ud.items.map((i) => ({ itemId: i.itemId, institution: i.institution, lastSync: i.lastSync })),
+    simplefin: ud.simplefin
+      ? { connected: true, lastSync: ud.simplefin.lastSync, institutions: ud.simplefin.institutions ?? [], errors: ud.simplefin.errors ?? [] }
       : { connected: false },
+    plaidConnections: { used: store.plaidItemsCreated, limit: PLAID_ITEM_LIMIT },
+    pushKey: vapidPublicKey(),
   });
 });
 
-app.get("/api/transactions", (_req, res) => {
-  res.json({ accounts: db.accounts, transactions: db.transactions });
+app.get("/api/transactions", (req, res) => {
+  const ud = mine(req);
+  res.json({ accounts: ud.accounts, transactions: ud.transactions });
 });
 
 /* Settings (categories, limits, edits, home layout…) live on the server so your phone and computer match. */
-app.get("/api/settings", (_req, res) => {
-  res.json({ settings: db.settings ?? null, updatedAt: db.settingsUpdatedAt ?? null });
+app.get("/api/settings", (req, res) => {
+  const ud = mine(req);
+  res.json({ settings: ud.settings ?? null, updatedAt: ud.settingsUpdatedAt ?? null });
 });
-app.put("/api/settings", (req, res) => {
+app.put("/api/settings", async (req, res) => {
   const settings = req.body?.settings;
   if (!settings || typeof settings !== "object" || Array.isArray(settings)) return res.status(400).json({ error: "settings must be an object" });
-  db.settings = settings;
-  db.settingsUpdatedAt = new Date().toISOString();
+  const ud = mine(req);
+  ud.settings = settings;
+  ud.settingsUpdatedAt = new Date().toISOString();
   save();
-  broadcast("settings", { updatedAt: db.settingsUpdatedAt });
-  res.json({ ok: true, updatedAt: db.settingsUpdatedAt });
+  broadcast(req.user!.id, "settings", { updatedAt: ud.settingsUpdatedAt });
+  res.json({ ok: true, updatedAt: ud.settingsUpdatedAt });
 });
 
-app.post("/api/link/token", async (_req, res) => {
-  if (!plaidConfigured) return res.status(400).json({ error: "Add PLAID_CLIENT_ID and PLAID_SECRET to .env" });
+/* ---- Plaid ---- */
+app.post("/api/link/token", async (req, res) => {
+  if (!plaidConfigured) return res.status(400).json({ error: "Add PLAID_CLIENT_ID and PLAID_SECRET to the server settings." });
+  if (process.env.PLAID_ENV === "production" && store.plaidItemsCreated >= PLAID_ITEM_LIMIT)
+    return res.status(400).json({
+      error: `This app has used all ${PLAID_ITEM_LIMIT} bank connections its Plaid plan allows. The owner can upgrade the Plaid plan, or you can connect with SimpleFIN below.`,
+    });
   try {
-    res.json({ linkToken: await createLinkToken("local-user") });
+    res.json({ linkToken: await createLinkToken(req.user!.id) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: `Could not start Plaid: ${plaidError(e)}` });
@@ -88,10 +204,11 @@ app.post("/api/link/token", async (_req, res) => {
 });
 
 app.post("/api/link/exchange", async (req, res) => {
+  const ud = mine(req);
   try {
-    const item = await exchangePublicToken(req.body.publicToken, req.body.institution);
-    const changed = await syncItem(item);
-    broadcast("transactions", { changed });
+    const item = await exchangePublicToken(ud, req.body.publicToken, req.body.institution);
+    const changed = await syncItem(ud, item);
+    await afterSync(req.user!.id, ud, changed);
     res.json({ ok: true, changed });
   } catch (e) {
     console.error(e);
@@ -99,73 +216,143 @@ app.post("/api/link/exchange", async (req, res) => {
   }
 });
 
-/* SimpleFIN: paste a Setup Token once; we keep the private Access URL on the server. */
-app.post("/api/simplefin/connect", async (req, res) => {
-  try {
-    const accessUrl = await claimSetupToken(String(req.body?.setupToken ?? ""));
-    db.simplefin = { accessUrl };
-    save();
-    const changed = await syncSimplefin();
-    broadcast("transactions", { changed });
-    res.json({ ok: true, changed, institutions: db.simplefin.institutions ?? [] });
-  } catch (e) {
-    res.status(400).json({ error: (e as Error).message });
-  }
-});
-app.delete("/api/simplefin", (_req, res) => {
-  db.simplefin = undefined;
-  save();
-  res.json({ ok: true });
-});
-
-app.post("/api/sync", async (_req, res) => {
-  const changed = (await syncAll()) + (await syncSimplefin().catch((e) => (console.error("[simplefin]", e), 0)));
-  if (changed) broadcast("transactions", { changed });
-  res.json({ changed });
-});
-
-app.delete("/api/items/:itemId", (req, res) => {
-  const item = db.items.find((i) => i.itemId === req.params.itemId);
-  db.items = db.items.filter((i) => i !== item);
+app.delete("/api/items/:itemId", async (req, res) => {
+  const ud = mine(req);
+  const item = ud.items.find((i) => i.itemId === req.params.itemId);
+  if (item) await removeItem(item);
+  ud.items = ud.items.filter((i) => i !== item);
   save();
   res.json({ ok: Boolean(item) });
 });
 
-/* Plaid calls this the moment new transactions are available (e.g. right after you tap your card). */
+/* ---- SimpleFIN: paste a Setup Token once; the private Access URL stays on the server, encrypted ---- */
+app.post("/api/simplefin/connect", async (req, res) => {
+  const ud = mine(req);
+  try {
+    const accessUrl = await claimSetupToken(String(req.body?.setupToken ?? ""));
+    ud.simplefin = { accessUrl: encryptSecret(accessUrl) };
+    save();
+    const changed = await syncSimplefin(ud);
+    await afterSync(req.user!.id, ud, changed);
+    res.json({ ok: true, changed, institutions: ud.simplefin.institutions ?? [] });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+app.delete("/api/simplefin", (req, res) => {
+  mine(req).simplefin = undefined;
+  save();
+  res.json({ ok: true });
+});
+
+app.post("/api/sync", async (req, res) => {
+  const ud = mine(req);
+  const changed = (await syncAll(ud)) + (await syncSimplefin(ud).catch((e) => (console.error("[simplefin]", e), 0)));
+  await afterSync(req.user!.id, ud, changed);
+  res.json({ changed });
+});
+
+/* ---- Notifications ---- */
+app.post("/api/push/subscribe", (req, res) => {
+  const sub = req.body?.subscription;
+  if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return res.status(400).json({ error: "Invalid subscription" });
+  subscribe(req.user!.id, sub);
+  res.json({ ok: true });
+});
+app.post("/api/push/unsubscribe", (req, res) => {
+  unsubscribe(String(req.body?.endpoint ?? ""));
+  res.json({ ok: true });
+});
+
+/* ---- Move your data between servers (e.g. from your computer to Render) ---- */
+interface ExportPayload {
+  items: (Omit<Item, "accessToken"> & { accessToken: string })[];
+  accounts: UserData["accounts"];
+  transactions: UserData["transactions"];
+  settings?: UserData["settings"];
+  simplefinUrl?: string;
+}
+
+app.post("/api/export", (req, res) => {
+  const passphrase = String(req.body?.passphrase ?? "");
+  if (passphrase.length < 8) return res.status(400).json({ error: "Choose a passphrase of at least 8 characters." });
+  const ud = mine(req);
+  // Secrets are decrypted here and re-sealed with your passphrase, so the file works on a server with a different key.
+  const payload: ExportPayload = {
+    items: ud.items.map((i) => ({ ...i, accessToken: decryptSecret(i.accessToken) })),
+    accounts: ud.accounts,
+    transactions: ud.transactions,
+    settings: ud.settings,
+    simplefinUrl: ud.simplefin ? decryptSecret(ud.simplefin.accessUrl) : undefined,
+  };
+  res.json(sealExport(payload, passphrase));
+});
+
+app.post("/api/import", async (req, res) => {
+  let payload: ExportPayload;
+  try {
+    payload = openExport<ExportPayload>(req.body?.file as SealedExport, String(req.body?.passphrase ?? ""));
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
+  const ud = mine(req);
+  const known = new Set(ud.items.map((i) => i.itemId));
+  const added = payload.items.filter((i) => !known.has(i.itemId)).map((i) => ({ ...i, accessToken: encryptSecret(i.accessToken) }));
+  ud.items.push(...added);
+  const accts = new Map(ud.accounts.map((a) => [a.id, a]));
+  for (const a of payload.accounts) accts.set(a.id, { ...a, ...accts.get(a.id) });
+  ud.accounts = [...accts.values()];
+  const txs = new Map(payload.transactions.map((t) => [t.id, t]));
+  for (const t of ud.transactions) txs.set(t.id, t);
+  ud.transactions = [...txs.values()];
+  if (payload.settings && !ud.settings) {
+    ud.settings = payload.settings;
+    ud.settingsUpdatedAt = new Date().toISOString();
+  }
+  if (payload.simplefinUrl && !ud.simplefin) ud.simplefin = { accessUrl: encryptSecret(payload.simplefinUrl) };
+  save(true);
+  // Plaid should now send "new purchase" webhooks here instead of the old server.
+  await Promise.all(added.map(updateWebhook));
+  broadcast(req.user!.id, "transactions", { changed: added.length });
+  broadcast(req.user!.id, "settings", {});
+  res.json({ ok: true, banks: added.length, transactions: payload.transactions.length });
+});
+
+/* ---- Plaid calls this the moment new transactions are available ---- */
 app.post("/api/plaid/webhook", async (req, res) => {
   res.json({ ok: true });
   const { webhook_type, webhook_code, item_id } = req.body ?? {};
   if (webhook_type !== "TRANSACTIONS") return;
   if (!["SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "HISTORICAL_UPDATE"].includes(webhook_code)) return;
-  const item = db.items.find((i) => i.itemId === item_id);
-  if (!item) return;
-  const changed = await syncItem(item).catch((e) => (console.error(e), 0));
-  if (changed) broadcast("transactions", { changed });
+  const found = findItem(String(item_id));
+  if (!found) return;
+  const changed = await syncItem(found.data, found.item).catch((e) => (console.error(e), 0));
+  await afterSync(found.userId, found.data, changed);
 });
 
-/* SimpleFIN refreshes about daily and allows roughly 24 requests a day: check every 3 hours. */
-setInterval(async () => {
-  if (!db.simplefin) return;
-  const changed = await syncSimplefin().catch((e) => (console.error("[simplefin]", e), 0));
-  if (changed) broadcast("transactions", { changed });
-}, 3 * 60 * 60_000);
-
-/* Fallback when no public webhook URL is configured. */
-const pollMinutes = Number(process.env.POLL_MINUTES ?? 15);
-if (plaidConfigured && pollMinutes > 0) {
-  setInterval(async () => {
-    const changed = await syncAll();
-    if (changed) broadcast("transactions", { changed });
-  }, pollMinutes * 60_000);
+/* ---- Background syncing for everyone ---- */
+async function syncEveryone(kind: "plaid" | "simplefin") {
+  for (const [userId, ud] of Object.entries(store.data)) {
+    const changed =
+      kind === "plaid" ? await syncAll(ud) : ud.simplefin ? await syncSimplefin(ud).catch((e) => (console.error("[simplefin]", e), 0)) : 0;
+    await afterSync(userId, ud, changed);
+  }
 }
+/* SimpleFIN refreshes about daily and allows roughly 24 requests a day: check every 3 hours. */
+setInterval(() => syncEveryone("simplefin"), 3 * 60 * 60_000);
+/* Plaid: webhooks do the fast path; this catches anything missed. */
+const pollMinutes = Number(process.env.POLL_MINUTES ?? 15);
+if (plaidConfigured && pollMinutes > 0) setInterval(() => syncEveryone("plaid"), pollMinutes * 60_000);
 
 if (process.env.NODE_ENV === "production") {
   const dist = path.resolve("dist");
-  app.use(express.static(dist));
+  app.use(express.static(dist, { index: false }));
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
 const port = Number(process.env.PORT ?? 8787);
 app.listen(port, () => {
-  console.log(`Centsible API on http://localhost:${port} — Plaid ${plaidConfigured ? `ready (${process.env.PLAID_ENV ?? "sandbox"})` : "not configured (CSV import & demo still work)"}`);
+  console.log(
+    `Centsible API on http://localhost:${port} — Plaid ${plaidConfigured ? `ready (${process.env.PLAID_ENV ?? "sandbox"})` : "not configured"} · ${store.users.length} account(s)`,
+  );
 });

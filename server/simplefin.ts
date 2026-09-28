@@ -4,9 +4,11 @@
  * Data refreshes about once a day, so this is "automatic" daily rather than within minutes like Plaid webhooks.
  */
 import type { Account, AccountType, Transaction } from "../src/lib/types";
-import { db, save } from "./store";
+import { decryptSecret } from "./crypto";
+import { save, type UserData } from "./store";
 
 export interface SimplefinConnection {
+  /** Encrypted at rest (see crypto.ts). */
   accessUrl: string;
   lastSync?: string;
   institutions?: string[];
@@ -112,12 +114,12 @@ export function mapSimplefin(data: SfResponse): { accounts: Account[]; transacti
 const DAY = 86_400;
 
 /** Pull accounts and recent transactions. First sync looks back 90 days, later ones 14 (to catch late-posting items). */
-export async function syncSimplefin(): Promise<number> {
-  const conn = db.simplefin;
+export async function syncSimplefin(ud: UserData): Promise<number> {
+  const conn = ud.simplefin;
   if (!conn) return 0;
   const lookback = conn.lastSync ? 14 : 90;
   const start = Math.floor(Date.now() / 1000) - lookback * DAY;
-  const { url, headers } = authed(conn.accessUrl, `/accounts?start-date=${start}&pending=1`);
+  const { url, headers } = authed(decryptSecret(conn.accessUrl), `/accounts?start-date=${start}&pending=1`);
   const res = await fetch(url, { headers });
   if (res.status === 403) {
     conn.errors = ["SimpleFIN access was revoked. Connect again with a new Setup Token."];
@@ -131,7 +133,7 @@ export async function syncSimplefin(): Promise<number> {
   const startDate = isoDate(start);
   const accountIds = new Set(mapped.accounts.map((a) => a.id));
   // Pending items in the window are replaced by whatever SimpleFIN reports now.
-  const kept = db.transactions.filter((t) => !(accountIds.has(t.accountId) && t.pending && t.date >= startDate));
+  const kept = ud.transactions.filter((t) => !(accountIds.has(t.accountId) && t.pending && t.date >= startDate));
   const byId = new Map(kept.map((t) => [t.id, t]));
   let changed = 0;
   for (const t of mapped.transactions) {
@@ -139,10 +141,10 @@ export async function syncSimplefin(): Promise<number> {
     if (!prev || prev.amount !== t.amount || prev.pending !== t.pending) changed++;
     byId.set(t.id, t);
   }
-  db.transactions = [...byId.values()];
+  ud.transactions = [...byId.values()];
   for (const a of mapped.accounts) {
-    const prev = db.accounts.find((x) => x.id === a.id);
-    db.accounts = db.accounts.filter((x) => x.id !== a.id).concat({ ...prev, ...a });
+    const prev = ud.accounts.find((x) => x.id === a.id);
+    ud.accounts = ud.accounts.filter((x) => x.id !== a.id).concat({ ...prev, ...a });
   }
   conn.lastSync = new Date().toISOString();
   conn.institutions = [...new Set(data.accounts.map((a) => a.org?.name).filter((n): n is string => Boolean(n)))];

@@ -1,10 +1,16 @@
+/**
+ * Everything the server keeps, in one JSON file on disk (fine for a family-sized app).
+ * Each person's banks, transactions and settings live in their own `UserData`, keyed by user id.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import type { Account, Transaction } from "../src/lib/types";
+import { encryptSecret, isEncrypted, randomToken } from "./crypto";
 import type { SimplefinConnection } from "./simplefin";
 
 export interface Item {
   itemId: string;
+  /** Encrypted at rest (see crypto.ts). */
   accessToken: string;
   institution?: string;
   cursor?: string;
@@ -13,32 +19,113 @@ export interface Item {
   liabilitiesAt?: string;
 }
 
-interface Db {
+/** One person's financial data and app settings. */
+export interface UserData {
   items: Item[];
   accounts: Account[];
   transactions: Transaction[];
-  /** App settings (categories, limits, edits, home layout…) shared by every device you open the app on. */
+  /** App settings (categories, limits, edits, home layout…) shared by every device this person uses. */
   settings?: Record<string, unknown>;
-  simplefin?: SimplefinConnection;
   settingsUpdatedAt?: string;
+  simplefin?: SimplefinConnection;
+  /** Limit alert state last notified, so push notifications fire once per crossing. */
+  alertStates?: Record<string, string>;
+  alertMonth?: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: "owner" | "member";
+  createdAt: string;
+}
+
+export interface Session {
+  /** sha256 of the cookie value — the cookie itself is never stored. */
+  idHash: string;
+  userId: string;
+  expiresAt: string;
+}
+
+export interface PushSubscriptionRecord {
+  userId: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  createdAt: string;
+}
+
+interface Store {
+  version: 2;
+  users: User[];
+  sessions: Session[];
+  data: Record<string, UserData>;
+  /** Invite code family members need to sign up. The owner can change it. */
+  inviteCode: string;
+  /** Plaid connections ever created (the Trial plan counts creations, not current connections). */
+  plaidItemsCreated: number;
+  push: PushSubscriptionRecord[];
+  vapid?: { publicKey: string; privateKey: string };
+  /** Data from the single-user version, handed to the first account created. */
+  legacy?: UserData;
 }
 
 const file = path.resolve(process.env.DATA_DIR ?? "data", "db.json");
 
-function load(): Db {
+export const emptyUserData = (): UserData => ({ items: [], accounts: [], transactions: [] });
+
+function load(): Store {
+  let raw: Record<string, unknown> | undefined;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    raw = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
-    return { items: [], accounts: [], transactions: [] };
+    /* first run */
   }
+  const base: Store = { version: 2, users: [], sessions: [], data: {}, inviteCode: randomToken(9), plaidItemsCreated: 0, push: [] };
+  if (!raw) return base;
+  if (raw.version === 2) return { ...base, ...(raw as unknown as Store) };
+  // Single-user file from before accounts existed: keep it for whoever signs up first.
+  const legacy = raw as unknown as UserData;
+  return { ...base, legacy, plaidItemsCreated: legacy.items?.length ?? 0 };
 }
 
-export const db: Db = load();
+export const store: Store = load();
 
-export function save() {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  // Access tokens live here: keep the file readable only by the owner.
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, file);
+/** Encrypt any secrets still stored in plain text (older versions). */
+function encryptAll(u: UserData) {
+  for (const i of u.items) if (!isEncrypted(i.accessToken)) i.accessToken = encryptSecret(i.accessToken);
+  if (u.simplefin && !isEncrypted(u.simplefin.accessUrl)) u.simplefin.accessUrl = encryptSecret(u.simplefin.accessUrl);
+}
+for (const u of Object.values(store.data)) encryptAll(u);
+if (store.legacy) encryptAll(store.legacy);
+
+export function userData(userId: string): UserData {
+  return (store.data[userId] ??= emptyUserData());
+}
+
+/** Find which person a Plaid item belongs to (webhooks only tell us the item). */
+export function findItem(itemId: string): { userId: string; data: UserData; item: Item } | undefined {
+  for (const [userId, data] of Object.entries(store.data)) {
+    const item = data.items.find((i) => i.itemId === itemId);
+    if (item) return { userId, data, item };
+  }
+  return undefined;
+}
+
+let timer: NodeJS.Timeout | undefined;
+/** Write to disk (atomically, owner-readable only). Calls within 200 ms are batched. */
+export function save(now = false) {
+  const write = () => {
+    timer = undefined;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(store), { mode: 0o600 });
+    fs.renameSync(tmp, file);
+  };
+  if (now) {
+    if (timer) clearTimeout(timer);
+    return write();
+  }
+  timer ??= setTimeout(write, 200);
 }

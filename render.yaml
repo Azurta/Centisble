@@ -1,6 +1,6 @@
 # One-click hosting on Render (https://render.com): New → Blueprint → pick this repo.
-# You'll be asked for your Plaid keys; APP_TOKEN (your app password) is generated for you —
-# find it under the service's Environment tab.
+# You'll be asked for your Plaid keys. APP_TOKEN is generated for you and is used as the key that encrypts
+# stored bank connections: never change or delete it. Everyone signs in with their own email + password.
 services:
   - type: web
     name: centsible

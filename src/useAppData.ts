@@ -51,7 +51,10 @@ export function useAppData() {
       setServerError(null);
       setLastUpdate(new Date());
     } catch (e) {
-      setServerError((e as { status?: number }).status === 401 ? "unauthorized" : "offline");
+      const code = (e as { status?: number }).status;
+      // Signed out elsewhere (or session expired): reload into the sign-in screen.
+      if (code === 401) window.location.reload();
+      setServerError(code === 401 ? "signed_out" : "offline");
     }
   }, []);
 

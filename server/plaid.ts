@@ -8,7 +8,8 @@ import {
   type Transaction as PlaidTx,
 } from "plaid";
 import type { Account, AccountType, Transaction } from "../src/lib/types";
-import { db, save, type Item } from "./store";
+import { decryptSecret, encryptSecret } from "./crypto";
+import { save, store, type Item, type UserData } from "./store";
 
 export const plaidConfigured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
 
@@ -59,12 +60,26 @@ export async function createLinkToken(userId: string) {
   }
 }
 
-export async function exchangePublicToken(publicToken: string, institution?: string) {
+export async function exchangePublicToken(ud: UserData, publicToken: string, institution?: string) {
   const res = await client.itemPublicTokenExchange({ public_token: publicToken });
-  const item: Item = { itemId: res.data.item_id, accessToken: res.data.access_token, institution };
-  db.items = db.items.filter((i) => i.itemId !== item.itemId).concat(item);
+  const item: Item = { itemId: res.data.item_id, accessToken: encryptSecret(res.data.access_token), institution };
+  ud.items = ud.items.filter((i) => i.itemId !== item.itemId).concat(item);
+  store.plaidItemsCreated++;
   save();
   return item;
+}
+
+/** Disconnect at Plaid too, so the bank stops sharing data. */
+export async function removeItem(item: Item): Promise<void> {
+  if (!plaidConfigured) return;
+  await client.itemRemove({ access_token: decryptSecret(item.accessToken) }).catch((e) => console.error("[plaid] remove failed:", plaidErrorCode(e) ?? e));
+}
+
+/** Point an item's webhook at this server (used after moving connections from another server). */
+export async function updateWebhook(item: Item): Promise<void> {
+  const webhook = webhookUrl();
+  if (!plaidConfigured || !webhook) return;
+  await client.itemWebhookUpdate({ access_token: decryptSecret(item.accessToken), webhook }).catch((e) => console.error("[plaid] webhook update failed:", plaidErrorCode(e) ?? e));
 }
 
 function accountType(a: AccountBase): AccountType {
@@ -91,13 +106,14 @@ function toTransaction(t: PlaidTx): Transaction {
 }
 
 /** Pull everything new since the last cursor. Returns how many transactions changed. */
-export async function syncItem(item: Item): Promise<number> {
+export async function syncItem(ud: UserData, item: Item): Promise<number> {
   let cursor = item.cursor;
   let changed = 0;
   let hasMore = true;
-  const byId = new Map(db.transactions.map((t) => [t.id, t]));
+  const byId = new Map(ud.transactions.map((t) => [t.id, t]));
+  const accessToken = decryptSecret(item.accessToken);
   while (hasMore) {
-    const { data } = await client.transactionsSync({ access_token: item.accessToken, cursor, count: 500 });
+    const { data } = await client.transactionsSync({ access_token: accessToken, cursor, count: 500 });
     for (const a of data.accounts) {
       const acct: Account = {
         id: a.account_id,
@@ -111,8 +127,8 @@ export async function syncItem(item: Item): Promise<number> {
         balanceAsOf: new Date().toISOString(),
       };
       // Keep what Liabilities filled in (APR, due date…) until it's refreshed.
-      const prev = db.accounts.find((x) => x.id === acct.id);
-      db.accounts = db.accounts.filter((x) => x.id !== acct.id).concat({ ...prev, ...acct });
+      const prev = ud.accounts.find((x) => x.id === acct.id);
+      ud.accounts = ud.accounts.filter((x) => x.id !== acct.id).concat({ ...prev, ...acct });
     }
     for (const t of [...data.added, ...data.modified]) {
       // A posted transaction replaces its pending version.
@@ -126,19 +142,19 @@ export async function syncItem(item: Item): Promise<number> {
     cursor = data.next_cursor;
     hasMore = data.has_more;
   }
-  db.transactions = [...byId.values()];
-  await refreshLiabilities(item);
+  ud.transactions = [...byId.values()];
+  await refreshLiabilities(ud, item);
   item.cursor = cursor;
   item.lastSync = new Date().toISOString();
   save();
   return changed;
 }
 
-export async function syncAll(): Promise<number> {
+export async function syncAll(ud: UserData): Promise<number> {
   let n = 0;
-  for (const item of db.items) {
+  for (const item of ud.items) {
     try {
-      n += await syncItem(item);
+      n += await syncItem(ud, item);
     } catch (e) {
       console.error(`[plaid] sync failed for ${item.institution ?? item.itemId}:`, (e as { response?: { data?: unknown } }).response?.data ?? e);
     }
@@ -149,10 +165,10 @@ export async function syncAll(): Promise<number> {
 const HALF_DAY = 12 * 60 * 60 * 1000;
 
 /** Fill in APRs, minimum payments and due dates from Plaid Liabilities. Banks that don't support it are skipped quietly. */
-async function refreshLiabilities(item: Item, force = false): Promise<void> {
+async function refreshLiabilities(ud: UserData, item: Item, force = false): Promise<void> {
   if (!force && item.liabilitiesAt && Date.now() - Date.parse(item.liabilitiesAt) < HALF_DAY) return;
   try {
-    const { data } = await client.liabilitiesGet({ access_token: item.accessToken });
+    const { data } = await client.liabilitiesGet({ access_token: decryptSecret(item.accessToken) });
     const patch = new Map<string, Partial<Account>>();
     for (const c of data.liabilities.credit ?? []) {
       if (!c.account_id) continue;
@@ -179,7 +195,7 @@ async function refreshLiabilities(item: Item, force = false): Promise<void> {
         nextDue: m.next_payment_due_date ?? undefined,
       });
     }
-    db.accounts = db.accounts.map((a) => (patch.has(a.id) ? { ...a, ...patch.get(a.id) } : a));
+    ud.accounts = ud.accounts.map((a) => (patch.has(a.id) ? { ...a, ...patch.get(a.id) } : a));
     item.liabilitiesAt = new Date().toISOString();
   } catch (e) {
     const code = plaidErrorCode(e);

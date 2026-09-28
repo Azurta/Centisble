@@ -1,7 +1,10 @@
-import { saveJson } from "./lib/storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_NAME } from "./brand";
 import { Accounts } from "./components/Accounts";
+import { AuthGate } from "./components/Auth";
+import { showLocalNotification } from "./pwa";
+import { Settings } from "./components/Settings";
+import type { Me } from "./api";
 import { Categories } from "./components/Categories";
 import { Insights } from "./components/Insights";
 import { Learn } from "./components/Learn";
@@ -24,10 +27,15 @@ const TABS = [
   { id: "categories", label: "Budgets" },
   { id: "learn", label: "Learn" },
   { id: "accounts", label: "Accounts" },
+  { id: "settings", label: "Settings" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
+  return <AuthGate>{(me) => <Main me={me} />}</AuthGate>;
+}
+
+function Main({ me }: { me: Me | null }) {
   const data = useAppData();
   // Coming back from a bank's own login page: reopen Accounts so the connection can finish.
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).has("oauth_state_id") ? "accounts" : "overview"));
@@ -85,7 +93,6 @@ export default function App() {
   };
 
   const empty = !data.classified.length;
-  if (data.serverError === "unauthorized") return <Unlock onUnlock={data.refresh} />;
 
   return (
     <div className="shell">
@@ -99,11 +106,18 @@ export default function App() {
             </svg>
             {APP_NAME}
           </div>
-          {!empty && (
-            <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
-              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-            </select>
-          )}
+          <div className="topbar-right">
+            {!empty && (
+              <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+                {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            )}
+            {me?.user && (
+              <button className="avatar" onClick={() => goTo("settings")} aria-label={`Signed in as ${me.user.name}. Open settings`} title={me.user.email}>
+                {me.user.name.slice(0, 1).toUpperCase()}
+              </button>
+            )}
+          </div>
         </div>
         <nav className="tabs" aria-label="Sections">
           {TABS.map((t) => (
@@ -118,7 +132,7 @@ export default function App() {
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
-        {empty && tab !== "accounts" && tab !== "learn" && tab !== "categories" ? (
+        {empty && !["accounts", "learn", "categories", "settings"].includes(tab) ? (
           <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
         ) : tab === "overview" ? (
           <Overview data={data} summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
@@ -130,42 +144,14 @@ export default function App() {
           <Categories data={data} summary={summary} history={history} statuses={statuses} />
         ) : tab === "learn" ? (
           <Learn data={data} focus={lessonFocus} />
+        ) : tab === "settings" ? (
+          <Settings me={me} data={data} />
         ) : (
           <Accounts key={anchor} data={data} focus={anchor} />
         )}
       </main>
       </div>
       {toast && <div className="toast" role="status">{toast}</div>}
-    </div>
-  );
-}
-
-/** Your hosted app asks for its password (APP_TOKEN) once per device. */
-function Unlock({ onUnlock }: { onUnlock: () => void }) {
-  const [value, setValue] = useState("");
-  const [tried, setTried] = useState(false);
-  return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="topbar-inner"><div className="brand">{APP_NAME}</div></div>
-      </header>
-      <div className="app">
-        <form
-          className="card unlock"
-          onSubmit={(e) => {
-            e.preventDefault();
-            saveJson("azurta.token", value);
-            setTried(true);
-            onUnlock();
-          }}
-        >
-          <h1>Unlock {APP_NAME}</h1>
-          <p className="muted">Enter the app password (the APP_TOKEN you set on your server). This device will remember it.</p>
-          <input id="unlock-token" type="password" autoComplete="current-password" value={value} onChange={(e) => setValue(e.target.value)} aria-label="App password" />
-          {tried && <p className="small bad">That password didn't work. Check APP_TOKEN on your server.</p>}
-          <button className="btn" disabled={!value}>Unlock</button>
-        </form>
-      </div>
     </div>
   );
 }
@@ -205,11 +191,7 @@ function useLimitAlerts(current: LimitStatus[]): string | null {
       })
       .join(" ");
     setToast(msg);
-    try {
-      if ("Notification" in window && Notification.permission === "granted") new Notification(APP_NAME, { body: msg });
-    } catch {
-      /* notifications unavailable */
-    }
+    showLocalNotification(APP_NAME, msg);
     const t = setTimeout(() => setToast(null), 8000);
     return () => clearTimeout(t);
   }, [current]);

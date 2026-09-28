@@ -32,25 +32,43 @@ It fixes the main problem with a hand-built budget sheet: **card payments counte
 
 ### 2. Host it (so it keeps syncing when your laptop is closed)
 
-**Render (easiest):** push this repo to GitHub, then on render.com choose **New → Blueprint** and pick the repo. `render.yaml` sets everything up (about $7/month for an always-on instance plus a small disk that keeps your data). Enter your Plaid keys when asked. Your app password (`APP_TOKEN`) is generated for you; find it under the service's **Environment** tab. Plaid's webhook URL is set automatically from the Render address.
+**Render (easiest):** on render.com choose **New → Blueprint** and pick the repo. `render.yaml` sets everything up (about $7/month for an always-on instance plus a small disk that keeps your data). Enter your Plaid keys when asked. `APP_TOKEN` is generated for you and encrypts stored bank connections; leave it alone. Plaid's webhook URL is set automatically from the Render address. Open the site and create the owner account.
 
-**Your own computer:** `npm run build && APP_TOKEN=<long-password> npm start`, then open http://localhost:8787. It only syncs while the computer is on.
+**Your own computer:** `npm run dev`, then open http://localhost:5173 and create your account. It only syncs while the computer is on.
 
 ### 3. Use it on your phone
 
-Open your Render URL, enter the app password once, and choose **Share → Add to Home Screen**. Categories, limits and edits are stored on your server, so your phone and computer show the same thing.
+Open your Render URL, sign in, and install it (see "Install it as an app"). Categories, limits and edits are stored on your server, so your phone and computer show the same thing.
 
-**Security notes:** bank access tokens live only on your server (`data/db.json`, readable only by the server). Hosted mode refuses to start without `APP_TOKEN`. The app only reads data; it can't move money.
+**Security notes:** bank connections are encrypted on your server. Passwords are stored as scrypt hashes, and sessions use HttpOnly cookies. Repeated failed sign-ins are slowed down. Hosted mode refuses to start without an encryption key. The app only reads data; it can't move money.
 
 **About hard limits:** the app watches and warns, but only your card issuer can decline a purchase. For a true hard stop, use your bank's card controls.
 
-## Sharing it with other people (not yet)
+## Sharing with family & friends
 
-Today it's built for **one person per server**. Before other people can connect their own accounts, it needs:
-- **Sign-up and login**, with each person's data kept separate (right now one password opens everything on the server).
-- **Encryption** of stored bank tokens, plus backups.
-- **Plaid full Production approval** (the Trial plan's 10 connections are shared by everyone), or each user brings their own SimpleFIN subscription.
-- **A privacy policy and terms**, and Plaid's security questionnaire.
+Everyone signs in with their own email and password and sees **only their own** banks, budgets and settings.
+
+- **The first account created on a server is the owner.** When you update from the single-user version, your existing data moves into it.
+- **Invite people:** Settings → Family & friends → **Copy link**, and send it. The link carries an invite code, so only people you invite can sign up. **Make a new link** stops the old one working.
+- **Forgotten password:** the owner can set a temporary one under Settings → People.
+- **Leaving:** Settings → Delete account disconnects that person's banks at Plaid and erases their data.
+- **Plaid's free Trial allows 10 bank connections in total for the whole app.** Settings shows how many are used. After that, people can use SimpleFIN, or you move to Plaid's paid plan.
+
+Bank connections (Plaid access tokens, SimpleFIN URLs) are encrypted on the server with `DATA_KEY` (or, on servers set up earlier, `APP_TOKEN`). Never change or delete that value once it's set.
+
+### Moving from your computer to Render without reconnecting banks
+
+1. **On your computer:** open the app, go to Settings → Move your data, choose a passphrase, and click **Export my data**.
+2. **On Render:** sign up (you'll be the owner), then go to Settings → Move your data. Enter the same passphrase, choose the file and click **Import**. Plaid is told to send updates to Render from now on.
+3. **Delete the export file** and stop the app on your computer.
+
+## Install it as an app
+
+Open the app on your phone:
+- **iPhone:** Safari → Share → **Add to Home Screen**.
+- **Android:** Chrome → ⋮ → **Install app**.
+
+Then go to Settings → **Turn on notifications** to get an alert when a purchase puts a category near or over its limit, even when the app is closed. (On iPhone this only works from the Home Screen app, iOS 16.4 or later.)
 
 ## Run it
 
@@ -67,7 +85,7 @@ Without Plaid keys you can still click **Try with demo data**, import CSVs, and 
 1. Create a free account at https://dashboard.plaid.com and copy your **client ID** and **Sandbox secret** into `.env`.
 2. Restart `npm run dev`, then go to **Accounts → Connect an account**. In Sandbox, pick any bank and log in with `user_good` / `pass_good`.
 3. For your real accounts, request Production access in the Plaid dashboard and set `PLAID_ENV=production`.
-4. *(Optional, for near-instant updates)* Expose the API with a tunnel such as `ngrok http 8787`. Set `PLAID_WEBHOOK_URL=https://<your-tunnel>/api/plaid/webhook` **and** an `APP_TOKEN` so nobody else can read your data. Then link your accounts again.
+4. *(Optional, for near-instant updates)* Expose the API with a tunnel such as `ngrok http 8787`. Set `PLAID_WEBHOOK_URL=https://<your-tunnel>/api/plaid/webhook`. Everyone still has to sign in, so nobody else can read your data.
 
 **Link every credit card you use**, not just checking. When a card is linked, its payment from checking is skipped. When a card isn't linked, its payment counts as spending (under Debt) so the money isn't missed, but you lose the per-category detail.
 
@@ -91,7 +109,7 @@ Bank CSV exports work too (**Import a bank CSV**). Import one file per account a
 
 - Bank access tokens and synced transactions are stored only on your machine, in `data/db.json` (file mode 600, git-ignored).
 - Imports, category fixes, budgets, and lesson progress are kept in your browser's local storage.
-- The server has no user accounts. It is built to run for one person on your own computer. Set `APP_TOKEN` before exposing it to the internet.
+- Each person has their own account; the server keeps everyone's data separate and encrypts bank connections.
 
 ## Development
 
