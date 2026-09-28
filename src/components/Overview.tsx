@@ -140,7 +140,7 @@ function SpendingWidget({ summary: s, nav }: Props) {
         slices={toSlices(s.byCategory)}
         centerLabel="Spent"
         centerValue={usd(s.spending)}
-        onSelect={(category) => nav.transactions({ category })}
+        onSelect={(ids) => nav.transactions(ids.length === 1 ? { category: ids[0] } : { categories: ids, view: "spending" })}
       />
       <p className="muted small mt-s">Tap a category to see its purchases.</p>
     </section>

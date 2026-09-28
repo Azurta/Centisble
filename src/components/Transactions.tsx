@@ -16,6 +16,8 @@ const KIND_LABEL: Record<TxKind, string> = {
 /** What the list is narrowed to when you arrive from the home screen (e.g. tapping "Income" or a pie slice). */
 export interface TxFilter {
   category?: CategoryId;
+  /** Several categories at once, e.g. the pie chart's "Other" slice. */
+  categories?: CategoryId[];
   view?: "spending" | "income" | "interest";
   accountId?: string;
 }
@@ -29,6 +31,7 @@ const VIEW_KINDS: Record<NonNullable<TxFilter["view"]>, TxKind[]> = {
 export function Transactions({ data, month, filter = {} }: { data: AppData; month: string; filter?: TxFilter }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<CategoryId | "">(filter.category ?? "");
+  const [group, setGroup] = useState<CategoryId[] | null>(filter.categories ?? null);
   const [view, setView] = useState<TxFilter["view"] | "">(filter.view ?? "");
   const [accountId, setAccountId] = useState(filter.accountId ?? "");
   const [showTransfers, setShowTransfers] = useState(true);
@@ -44,6 +47,7 @@ export function Transactions({ data, month, filter = {} }: { data: AppData; mont
       // Looking at one account shows its whole history; otherwise just the selected month.
       (accountId ? t.accountId === accountId : t.date.startsWith(month)) &&
       (!cat || t.category === cat) &&
+      (!group || group.includes(t.category)) &&
       (!view || VIEW_KINDS[view].includes(t.kind)) &&
       (showTransfers || t.kind !== "transfer") &&
       (!q || `${t.description} ${t.merchant ?? ""}`.toLowerCase().includes(q.toLowerCase())),
@@ -75,10 +79,15 @@ export function Transactions({ data, month, filter = {} }: { data: AppData; mont
           <label className="check"><input type="checkbox" checked={showTransfers} onChange={(e) => setShowTransfers(e.target.checked)} /> Show card payments & transfers</label>
           <label className="check"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember category for merchant</label>
         </div>
-        {(cat || view || accountId) && rows.length > 0 && (
+        {group && (
+          <p className="small">
+            Showing <strong>Other</strong>: {group.map((id) => categoryInfo(id).label).join(", ")}
+          </p>
+        )}
+        {(cat || view || accountId || group) && rows.length > 0 && (
           <p className="small muted">
             {rows.length} transaction{rows.length > 1 ? "s" : ""} · {view === "income" ? "received" : "net"} {usd(Math.abs(total), true)}{" "}
-            <button className="link small" onClick={() => { setCat(""); setView(""); setAccountId(""); }}>Clear filters</button>
+            <button className="link small" onClick={() => { setCat(""); setView(""); setAccountId(""); setGroup(null); }}>Clear filters</button>
           </p>
         )}
         {!rows.length ? (

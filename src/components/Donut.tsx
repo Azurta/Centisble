@@ -6,6 +6,8 @@ import type { CategoryId } from "../lib/types";
 
 export interface Slice {
   id: CategoryId | "other";
+  /** The categories this slice stands for ("Other" groups several). */
+  ids: CategoryId[];
   label: string;
   value: number;
 }
@@ -15,16 +17,18 @@ export function toSlices(values: Partial<Record<CategoryId, number>>): Slice[] {
   const slices: Slice[] = [];
   let other = 0;
   const otherNames: string[] = [];
+  const otherIds: CategoryId[] = [];
   for (const [id, v] of Object.entries(values) as [CategoryId, number][]) {
     if (!v || v <= 0.5) continue;
-    if (hasOwnColor(id)) slices.push({ id, label: categoryInfo(id).label, value: v });
+    if (hasOwnColor(id)) slices.push({ id, ids: [id], label: categoryInfo(id).label, value: v });
     else {
       other += v;
       otherNames.push(categoryInfo(id).label);
+      otherIds.push(id);
     }
   }
   slices.sort((a, b) => b.value - a.value);
-  if (other > 0.5) slices.push({ id: "other", label: otherNames.length === 1 ? otherNames[0] : "Other", value: other });
+  if (other > 0.5) slices.push({ id: "other", ids: otherIds, label: otherNames.length === 1 ? otherNames[0] : "Other", value: other });
   return slices;
 }
 
@@ -38,7 +42,8 @@ export function Donut({
   centerLabel: string;
   centerValue: string;
   /** Called with a category id when a slice or legend row is clicked. */
-  onSelect?: (id: CategoryId) => void;
+  /** Called with the slice's categories when a slice or legend row is clicked. */
+  onSelect?: (ids: CategoryId[], label: string) => void;
 }) {
   const pal = usePalette();
   const total = slices.reduce((a, s) => a + s.value, 0);
@@ -63,8 +68,8 @@ export function Donut({
                 <Cell
                   key={s.id}
                   fill={pal.category(s.id)}
-                  cursor={onSelect && s.id !== "other" ? "pointer" : undefined}
-                  onClick={() => onSelect && s.id !== "other" && onSelect(s.id)}
+                  cursor={onSelect ? "pointer" : undefined}
+                  onClick={() => onSelect?.(s.ids, s.label)}
                 />
               ))}
             </Pie>
@@ -93,8 +98,8 @@ export function Donut({
           );
           return (
             <li key={s.id}>
-              {onSelect && s.id !== "other" ? (
-                <button className="legend-row" onClick={() => onSelect(s.id)} aria-label={`See ${s.label} purchases`}>{row}</button>
+              {onSelect ? (
+                <button className="legend-row" onClick={() => onSelect(s.ids, s.label)} aria-label={`See ${s.label} purchases`}>{row}</button>
               ) : (
                 <div className="legend-row">{row}</div>
               )}
