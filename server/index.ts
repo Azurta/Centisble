@@ -24,6 +24,7 @@ import { finishGoogle, googleEnabled, startGoogle } from "./google";
 import { decryptSecret, encryptSecret, openExport, sealExport, type SealedExport } from "./crypto";
 import { createLinkToken, exchangePublicToken, plaidConfigured, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
 import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
+import { sendBillReminders } from "./reminders";
 import { claimSetupToken, syncSimplefin } from "./simplefin";
 import { findItem, save, store, userData, type Item, type UserData } from "./store";
 
@@ -374,6 +375,10 @@ async function syncEveryone(kind: "plaid" | "simplefin") {
     await afterSync(userId, ud, changed);
   }
 }
+/* Bill reminders: checked hourly (each reminder is sent once, in the person's daytime). */
+setInterval(() => sendBillReminders().catch((e) => console.error("[bills]", e)), 60 * 60_000);
+setTimeout(() => sendBillReminders().catch((e) => console.error("[bills]", e)), 30_000);
+
 /* SimpleFIN refreshes about daily and allows roughly 24 requests a day: check every 3 hours. */
 setInterval(() => syncEveryone("simplefin"), 3 * 60 * 60_000);
 /* Plaid: webhooks do the fast path; this catches anything missed. */

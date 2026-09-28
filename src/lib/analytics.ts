@@ -105,16 +105,23 @@ export interface Recurring {
   monthly: number;
   category: CategoryId;
   months: number;
+  /** Date of the most recent charge (YYYY-MM-DD). */
+  lastDate: string;
+  /** A sample description, for matching future charges. */
+  description: string;
 }
 
-/** Charges from the same merchant, at a similar amount, in at least 2 of the last 3 months. */
-export function findRecurring(all: ClassifiedTransaction[], month: string): Recurring[] {
+/**
+ * Charges from the same merchant, at a similar amount, in at least 2 of the last 3 months.
+ * `includeFixed` also returns rent and loan payments (wanted for bills, not for "subscriptions to cut").
+ */
+export function findRecurring(all: ClassifiedTransaction[], month: string, opts: { includeFixed?: boolean } = {}): Recurring[] {
   const recent = new Set(monthsIn(all).filter((m) => m <= month).slice(0, 3));
   const groups = new Map<string, ClassifiedTransaction[]>();
   for (const t of all) {
     if (t.kind !== "expense" || !recent.has(monthOf(t.date))) continue;
     // Rent/loans are expected; groceries, gas and eating out repeat by habit, not by contract.
-    if (["rent", "debt", "groceries", "going_out", "alcohol"].includes(t.category)) continue;
+    if ((opts.includeFixed ? [] : ["rent", "debt"]).concat(["groceries", "going_out", "alcohol"]).includes(t.category)) continue;
     if (/gas|fuel|shell|chevron|exxon|mobil|wawa|sheetz|speedway|valero|arco/i.test(t.description)) continue;
     const k = merchantKey(t);
     (groups.get(k) ?? groups.set(k, []).get(k)!).push(t);
@@ -126,7 +133,16 @@ export function findRecurring(all: ClassifiedTransaction[], month: string): Recu
     const amounts = txs.map((t) => t.amount);
     const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
     if (amounts.some((a) => Math.abs(a - avg) > Math.max(1, avg * 0.05))) continue;
-    out.push({ key, label: txs[0].merchant || txs[0].description, monthly: avg, category: txs[0].category, months: months.size });
+    const latest = txs.reduce((a, b) => (b.date > a.date ? b : a));
+    out.push({
+      key,
+      label: latest.merchant || latest.description,
+      monthly: avg,
+      category: latest.category,
+      months: months.size,
+      lastDate: latest.date,
+      description: latest.description,
+    });
   }
   return out.sort((a, b) => b.monthly - a.monthly);
 }

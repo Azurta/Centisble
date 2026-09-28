@@ -5,7 +5,9 @@ import { AuthGate } from "./components/Auth";
 import { showLocalNotification } from "./pwa";
 import { Settings } from "./components/Settings";
 import type { Me } from "./api";
+import { Bills } from "./components/Bills";
 import { Categories } from "./components/Categories";
+import { Goals } from "./components/Goals";
 import { Insights } from "./components/Insights";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
@@ -25,6 +27,7 @@ const TABS = [
   { id: "transactions", label: "Transactions" },
   { id: "insights", label: "Savings" },
   { id: "categories", label: "Budgets" },
+  { id: "bills", label: "Bills" },
   { id: "learn", label: "Learn" },
   { id: "accounts", label: "Accounts" },
   { id: "settings", label: "Settings" },
@@ -132,16 +135,21 @@ function Main({ me }: { me: Me | null }) {
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
-        {empty && !["accounts", "learn", "categories", "settings"].includes(tab) ? (
+        {empty && !["accounts", "learn", "categories", "settings", "bills", "insights"].includes(tab) ? (
           <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
         ) : tab === "overview" ? (
           <Overview data={data} summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
         ) : tab === "transactions" ? (
           <Transactions key={JSON.stringify(txFilter)} data={data} month={month} filter={txFilter} />
         ) : tab === "insights" ? (
-          <Insights summary={summary} tips={tips} recurring={recurring} score={score} goTo={goTo} />
+          <div className="stack">
+            <Goals data={data} />
+            <Insights summary={summary} tips={tips} recurring={recurring} score={score} goTo={goTo} />
+          </div>
         ) : tab === "categories" ? (
           <Categories data={data} summary={summary} history={history} statuses={statuses} />
+        ) : tab === "bills" ? (
+          <Bills data={data} month={month} />
         ) : tab === "learn" ? (
           <Learn data={data} focus={lessonFocus} />
         ) : tab === "settings" ? (

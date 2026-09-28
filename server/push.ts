@@ -9,6 +9,7 @@ import { setCategories, categoryInfo, DEFAULT_CATEGORIES, type CategoryInfo } fr
 import { classifyAll } from "../src/lib/classify";
 import { limitStatuses } from "../src/lib/limits";
 import { applyEdits } from "../src/lib/networth";
+import type { Bill } from "../src/lib/bills";
 import type { Account, AccountEdits, Budgets, Overrides, Transaction } from "../src/lib/types";
 import { save, store, type UserData } from "./store";
 
@@ -50,13 +51,24 @@ export async function notify(userId: string, title: string, body: string, url = 
   }
 }
 
-interface SyncedSettings {
+export interface SyncedSettings {
   local?: { accounts: Account[]; transactions: Transaction[] };
   overrides?: Overrides;
   budgets?: Budgets;
   categories?: CategoryInfo[];
   alertAt?: number;
   accountEdits?: AccountEdits;
+  bills?: Bill[];
+  tz?: string;
+}
+
+/** The same classified view of someone's money that the app shows them. */
+export function classifiedFor(ud: UserData) {
+  const s = (ud.settings ?? {}) as SyncedSettings;
+  setCategories(s.categories ?? DEFAULT_CATEGORIES);
+  const accounts = applyEdits([...(s.local?.accounts ?? []), ...ud.accounts], s.accountEdits ?? {});
+  const txs = [...(s.local?.transactions ?? []), ...ud.transactions];
+  return { settings: s, accounts, txs: classifyAll(txs, accounts, s.overrides) };
 }
 
 const RANK: Record<string, number> = { none: 0, ok: 0, warn: 1, over: 2 };
@@ -72,10 +84,8 @@ export async function checkLimits(userId: string, ud: UserData): Promise<void> {
     ud.alertStates = {};
   }
   // Same inputs the app uses on screen, so alerts match what you see.
-  setCategories(s.categories ?? DEFAULT_CATEGORIES);
-  const accounts = applyEdits([...(s.local?.accounts ?? []), ...ud.accounts], s.accountEdits ?? {});
-  const txs = [...(s.local?.transactions ?? []), ...ud.transactions];
-  const statuses = limitStatuses(summarize(classifyAll(txs, accounts, s.overrides), month), s.budgets, s.alertAt ?? 0.8);
+  const { txs } = classifiedFor(ud);
+  const statuses = limitStatuses(summarize(txs, month), s.budgets, s.alertAt ?? 0.8);
   const prev = ud.alertStates ?? {};
   const crossed = statuses.filter((x) => RANK[x.state] > RANK[prev[x.id] ?? "none"]);
   ud.alertStates = Object.fromEntries(statuses.map((x) => [x.id, x.state]));

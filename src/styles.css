@@ -480,3 +480,45 @@ details.more[open] > summary { margin-bottom: 12px; }
 .btn.google:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* Bills */
+.bill-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bill-list { list-style: none; margin: 0; padding: 0; }
+.bill { border-bottom: 1px solid var(--border); padding: 10px 0; }
+.bill-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bill-text { display: flex; flex-direction: column; flex: 1 1 160px; min-width: 0; }
+.bill-amt { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bill .chip { margin-left: 0; }
+.calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 12px; }
+.cal-head { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 6px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.cal-cell { min-height: 78px; padding: 4px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-cell:nth-child(7n) { border-right: 0; }
+.cal-cell.blank { background: var(--surface-2); }
+.cal-cell.today .cal-day { background: var(--accent); color: var(--accent-ink); border-radius: 999px; }
+.cal-day { font-size: 12px; color: var(--text-2); align-self: flex-start; min-width: 20px; text-align: center; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.cal-bill {
+  display: flex; flex-direction: column; align-items: flex-start; width: 100%; min-width: 0; text-align: left; cursor: pointer;
+  font-size: 11px; line-height: 1.25; padding: 3px 5px; border-radius: 4px; border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  background: var(--surface); color: var(--text);
+}
+.cal-bill.paid { border-left-color: var(--status-good); opacity: 0.75; }
+.cal-bill.overdue, .cal-bill.due-today { border-left-color: var(--status-critical); }
+.cal-bill.due-soon { border-left-color: var(--status-warning); }
+.cal-bill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.cal-bill-amt { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .cal-cell { min-height: 52px; padding: 2px; }
+  .cal-bill { padding: 2px 3px; }
+  .cal-bill-name { display: none; }
+  .bill-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Goals */
+.goal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.goal { display: grid; gap: 2px; }
+.goal-meta { display: flex; flex-wrap: wrap; gap: 0 2px; }
+.text { color: var(--text); }
+@media (max-width: 760px) {
+  .cal-bill-amt { font-size: 10px; letter-spacing: -0.02em; }
+  .cal-bill { border-left-width: 2px; }
+}

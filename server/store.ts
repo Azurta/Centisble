@@ -31,6 +31,8 @@ export interface UserData {
   /** Limit alert state last notified, so push notifications fire once per crossing. */
   alertStates?: Record<string, string>;
   alertMonth?: string;
+  /** Bill reminders already sent, e.g. "bill-123:2026-10:soon". */
+  billReminders?: string[];
 }
 
 export interface User {

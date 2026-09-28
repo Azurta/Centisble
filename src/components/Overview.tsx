@@ -11,6 +11,9 @@ import { STATIC, type AppData } from "../useAppData";
 import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
 import { Sortable } from "./Sortable";
+import { Goals } from "./Goals";
+import { shortDay, statusLine } from "./Bills";
+import { billsForMonth, billTotals } from "../lib/bills";
 import type { TxFilter } from "./Transactions";
 
 /* ------------------------------------------------------------------ */
@@ -21,6 +24,8 @@ export const WIDGETS = [
   { id: "spending", label: "Where your money went (pie chart)", size: "half" },
   { id: "snapshot", label: "Income, expenses, what you own & owe", size: "half" },
   { id: "limits", label: "Limits this month", size: "wide" },
+  { id: "bills", label: "Upcoming bills", size: "half" },
+  { id: "goals", label: "Savings goals", size: "half" },
   { id: "accounts", label: "Accounts & net worth", size: "half" },
   { id: "debt", label: "Debt & interest", size: "half" },
   { id: "score", label: "Money Score & top tips", size: "half" },
@@ -33,12 +38,16 @@ export interface HomeWidget {
   hidden?: boolean;
 }
 
-/** Your saved layout, plus any widgets added in a newer version (appended, visible). */
+/** Your saved layout, plus any widgets added in a newer version (placed after their neighbour in the default order). */
 export function resolveLayout(saved: HomeWidget[]): HomeWidget[] {
   const known = new Set<string>(WIDGETS.map((w) => w.id));
-  const kept = saved.filter((w) => known.has(w.id));
-  const missing = WIDGETS.filter((w) => !kept.some((k) => k.id === w.id)).map((w) => ({ id: w.id }));
-  return [...kept, ...missing];
+  const out = saved.filter((w) => known.has(w.id));
+  WIDGETS.forEach((w, i) => {
+    if (out.some((k) => k.id === w.id)) return;
+    const prev = i > 0 ? out.findIndex((k) => k.id === WIDGETS[i - 1].id) : -1;
+    out.splice(prev + 1, 0, { id: w.id });
+  });
+  return out;
 }
 
 export interface Nav {
@@ -68,6 +77,8 @@ export function Overview(props: Props) {
     spending: () => <SpendingWidget {...props} />,
     snapshot: () => <SnapshotWidget {...props} />,
     limits: () => <LimitAlerts statuses={props.statuses} nav={props.nav} />,
+    bills: () => <BillsWidget {...props} />,
+    goals: () => <Goals data={data} compact />,
     accounts: () => <AccountsWidget {...props} />,
     debt: () => <DebtWidget {...props} />,
     score: () => <ScoreWidget {...props} />,
@@ -446,6 +457,43 @@ function LimitAlerts({ statuses, nav }: { statuses: LimitStatus[]; nav: Nav }) {
         <button className="link small mt-s" onClick={async () => setPerm(await Notification.requestPermission())}>
           Also alert me on this device when a purchase gets close to a limit
         </button>
+      )}
+    </section>
+  );
+}
+
+function BillsWidget({ data, nav }: Props) {
+  const month = new Date().toISOString().slice(0, 7);
+  const occ = billsForMonth(data.bills, data.classified, month);
+  const t = billTotals(occ);
+  const open = occ.filter((o) => o.status !== "paid");
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Upcoming bills</h2>
+        <button className="link" onClick={() => nav.tab("bills")}>{data.bills.length ? "All bills →" : "Add bills →"}</button>
+      </div>
+      {!data.bills.length ? (
+        <p className="muted small">Add your monthly bills to see what's due and get a reminder before each one.</p>
+      ) : !open.length ? (
+        <p className="small good">All {occ.length} bills paid this month ({usd(t.paid)}).</p>
+      ) : (
+        <>
+          <ul className="acct-list">
+            {open.slice(0, 5).map((o) => (
+              <li key={o.bill.id}>
+                <button className="acct-line" onClick={() => nav.tab("bills")}>
+                  <span className="acct-name">
+                    {o.bill.name}
+                    <span className={`acct-type ${o.status === "overdue" || o.status === "due-today" ? "bad" : ""}`}>{shortDay(o.date)} · {statusLine(o)}</span>
+                  </span>
+                  <span className="acct-bal">{usd(o.bill.amount, true)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small mt-s">{usd(t.left)} still to pay this month · {usd(t.paid)} paid</p>
+        </>
       )}
     </section>
   );
