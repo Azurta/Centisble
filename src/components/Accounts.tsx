@@ -61,8 +61,13 @@ function usePlaid(data: AppData, setMsg: (m: string) => void) {
         setMsg(`Could not connect: ${(e as Error).message}`);
       }
     },
-    onExit: () => {
+    onExit: (err, meta) => {
       if (resuming) window.history.replaceState(null, "", window.location.pathname);
+      // Plaid explains failures inside Link (e.g. the bank is down or needs a different login flow).
+      if (err)
+        setMsg(
+          `${meta.institution?.name ?? "The bank"} couldn't connect: ${err.display_message || err.error_message} (${err.error_code}).`,
+        );
     },
   });
   useEffect(() => {

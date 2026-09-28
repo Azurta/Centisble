@@ -11,6 +11,13 @@ if (process.env.NODE_ENV === "production" && !process.env.APP_TOKEN) {
   process.exit(1);
 }
 
+/** Plaid's own explanation (code + message), which says what's actually wrong. */
+function plaidError(e: unknown): string {
+  const d = (e as { response?: { data?: { error_code?: string; error_message?: string; display_message?: string } } }).response?.data;
+  if (!d?.error_code) return (e as Error).message ?? "unknown error";
+  return `${d.error_code}: ${d.display_message ?? d.error_message ?? ""}`.trim();
+}
+
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 
@@ -76,7 +83,7 @@ app.post("/api/link/token", async (_req, res) => {
     res.json({ linkToken: await createLinkToken("local-user") });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: "Could not create Plaid link token" });
+    res.status(500).json({ error: `Could not start Plaid: ${plaidError(e)}` });
   }
 });
 
@@ -88,7 +95,7 @@ app.post("/api/link/exchange", async (req, res) => {
     res.json({ ok: true, changed });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: "Could not link account" });
+    res.status(500).json({ error: `Could not link account: ${plaidError(e)}` });
   }
 });
 
