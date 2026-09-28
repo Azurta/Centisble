@@ -31,13 +31,13 @@ export function webhookUrl(): string | undefined {
   return undefined;
 }
 
+const plaidErrorCode = (e: unknown) => (e as { response?: { data?: { error_code?: string } } }).response?.data?.error_code;
+
 export async function createLinkToken(userId: string) {
-  const res = await client.linkTokenCreate({
+  const request = {
     user: { client_user_id: userId },
     client_name: "Centsible",
     products: [Products.Transactions],
-    // Interest rates, minimum payments and due dates for cards and loans, where the bank supports it.
-    required_if_supported_products: [Products.Liabilities],
     country_codes: [CountryCode.Us],
     language: "en",
     webhook: webhookUrl(),
@@ -45,8 +45,18 @@ export async function createLinkToken(userId: string) {
     // (the URI must also be registered in the Plaid dashboard). Without it Link uses a pop-up.
     redirect_uri: process.env.PLAID_REDIRECT_URI || undefined,
     transactions: { days_requested: 730 },
-  });
-  return res.data.link_token;
+  };
+  try {
+    // Interest rates, minimum payments and due dates for cards and loans, where the bank supports it.
+    const res = await client.linkTokenCreate({ ...request, required_if_supported_products: [Products.Liabilities] });
+    return res.data.link_token;
+  } catch (e) {
+    // Your Plaid account may not have Liabilities turned on; connect with Transactions alone rather than fail.
+    if (plaidErrorCode(e) !== "INVALID_PRODUCT") throw e;
+    console.warn("[plaid] Liabilities isn't enabled for these keys; connecting without interest rates / due dates.");
+    const res = await client.linkTokenCreate(request);
+    return res.data.link_token;
+  }
 }
 
 export async function exchangePublicToken(publicToken: string, institution?: string) {
@@ -172,9 +182,10 @@ async function refreshLiabilities(item: Item, force = false): Promise<void> {
     db.accounts = db.accounts.map((a) => (patch.has(a.id) ? { ...a, ...patch.get(a.id) } : a));
     item.liabilitiesAt = new Date().toISOString();
   } catch (e) {
-    const code = (e as { response?: { data?: { error_code?: string } } }).response?.data?.error_code;
-    // Not every bank/account supports Liabilities; don't retry those constantly.
-    if (code === "PRODUCTS_NOT_SUPPORTED" || code === "NO_LIABILITY_ACCOUNTS") item.liabilitiesAt = new Date().toISOString();
+    const code = plaidErrorCode(e);
+    // Not every bank/account (or Plaid plan) supports Liabilities; don't retry those constantly.
+    if (code === "PRODUCTS_NOT_SUPPORTED" || code === "NO_LIABILITY_ACCOUNTS" || code === "INVALID_PRODUCT" || code === "PRODUCT_NOT_ENABLED")
+      item.liabilitiesAt = new Date().toISOString();
     else console.error(`[plaid] liabilities failed for ${item.institution ?? item.itemId}:`, code ?? e);
   }
 }
