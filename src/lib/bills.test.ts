@@ -55,6 +55,20 @@ it("tidies bank-style names", async () => {
   expect(tidyName("Verizon Wireless")).toBe("Verizon Wireless");
 });
 
+it("summarizes the year so far", async () => {
+  const { billsYearToDate } = await import("./bills");
+  const rows = billsYearToDate(
+    [{ id: "phone", name: "Verizon", amount: 65, dueDay: 3 }, { id: "rent", name: "Avalon", amount: 1100, dueDay: 1 }],
+    txs,
+    "2026-09",
+    new Date("2026-09-24T12:00:00Z"),
+  );
+  expect(rows.map((r) => [r.month, r.onTime, r.late, r.missed])).toEqual([
+    ["2026-08", 2, 0, 0],
+    ["2026-09", 2, 0, 0],
+  ]);
+});
+
 describe("goals", () => {
   it("tracks progress and the monthly amount needed", () => {
     const p = goalProgress({ id: "g", name: "Emergency fund", target: 1000, saved: 250, deadline: "2026-12" }, accounts, new Date("2026-09-15"));

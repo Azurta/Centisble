@@ -28,7 +28,8 @@ const VIEW_KINDS: Record<NonNullable<TxFilter["view"]>, TxKind[]> = {
   interest: ["interest"],
 };
 
-export function Transactions({ data, month, filter = {} }: { data: AppData; month: string; filter?: TxFilter }) {
+export function Transactions({ data, months, periodLabel, filter = {} }: { data: AppData; months: string[]; periodLabel: string; filter?: TxFilter }) {
+  const inPeriod = new Set(months);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<CategoryId | "">(filter.category ?? "");
   const [group, setGroup] = useState<CategoryId[] | null>(filter.categories ?? null);
@@ -45,7 +46,7 @@ export function Transactions({ data, month, filter = {} }: { data: AppData; mont
   const rows = data.classified.filter(
     (t) =>
       // Looking at one account shows its whole history; otherwise just the selected month.
-      (accountId ? t.accountId === accountId : t.date.startsWith(month)) &&
+      (accountId ? t.accountId === accountId : inPeriod.has(t.date.slice(0, 7))) &&
       (!cat || t.category === cat) &&
       (!group || group.includes(t.category)) &&
       (!view || VIEW_KINDS[view].includes(t.kind)) &&
@@ -72,7 +73,7 @@ export function Transactions({ data, month, filter = {} }: { data: AppData; mont
           </select>
           {accountsWithTx.length > 1 && (
             <select value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="Filter by account">
-              <option value="">All accounts (this month)</option>
+              <option value="">All accounts ({periodLabel})</option>
               {accountsWithTx.map((a) => <option key={a.id} value={a.id}>{a.name} (all time)</option>)}
             </select>
           )}

@@ -3,6 +3,7 @@ import { APP_NAME } from "./brand";
 import { Accounts } from "./components/Accounts";
 import { AuthGate } from "./components/Auth";
 import { showLocalNotification } from "./pwa";
+import { useApplyAppearance } from "./appearance";
 import { Settings } from "./components/Settings";
 import type { Me } from "./api";
 import { Bills } from "./components/Bills";
@@ -13,7 +14,8 @@ import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
 import { Transactions, type TxFilter } from "./components/Transactions";
 import { monthLabel } from "./format";
-import { findRecurring, monthsIn, moneyScore, savingTips, summarize, trend } from "./lib/analytics";
+import { findRecurring, monthsIn, moneyScore, savingTips, summarize, summarizeMonths, trend, ytdMonths } from "./lib/analytics";
+import { loadJson, saveJson } from "./lib/storage";
 import { categoryInfo } from "./lib/categories";
 import { limitStatuses, newlyCrossed, type LimitStatus } from "./lib/limits";
 import { isDebt, netWorth } from "./lib/networth";
@@ -38,8 +40,11 @@ export default function App() {
   return <AuthGate>{(me) => <Main me={me} />}</AuthGate>;
 }
 
+type Period = "month" | "ytd";
+
 function Main({ me }: { me: Me | null }) {
   const data = useAppData();
+  useApplyAppearance(data.appearance);
   // Coming back from a bank's own login page: reopen Accounts so the connection can finish.
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).has("oauth_state_id") ? "accounts" : "overview"));
   const [lessonFocus, setLessonFocus] = useState<string>();
@@ -50,6 +55,31 @@ function Main({ me }: { me: Me | null }) {
   }, [months, month]);
 
   const summary = useMemo(() => summarize(data.classified, month), [data.classified, month]);
+
+  /* "This month" vs "Year to date": what the home screen, transactions and charts add up. Remembered per device. */
+  const [period, setPeriodState] = useState<Period>(() => loadJson<Period>("centsible.period", "month"));
+  const setPeriod = (p: Period) => {
+    setPeriodState(p);
+    saveJson("centsible.period", p);
+  };
+  const periodMonths = useMemo(() => (period === "ytd" ? ytdMonths(month || new Date().toISOString().slice(0, 7)) : [month]), [period, month]);
+  const periodSummary = useMemo(
+    () => (period === "ytd" ? summarizeMonths(data.classified, periodMonths) : summary),
+    [period, periodMonths, data.classified, summary],
+  );
+  // What to compare against: last month, or the same stretch of last year.
+  const previousSummary = useMemo(() => {
+    if (!month) return undefined;
+    const [y, m] = month.split("-").map(Number);
+    if (period === "ytd") return summarizeMonths(data.classified, periodMonths.map((pm) => `${y - 1}${pm.slice(4)}`));
+    const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+    return summarize(data.classified, prev);
+  }, [period, periodMonths, month, data.classified]);
+  const ytdSummary = useMemo(
+    () => (month ? summarizeMonths(data.classified, ytdMonths(month)) : undefined),
+    [data.classified, month],
+  );
+  const periodLabel = period === "ytd" ? `${month.slice(0, 4)} so far` : monthLabel(month).split(" ")[0];
   const history = useMemo(() => trend(data.classified, 6), [data.classified]);
   const tips = useMemo(() => savingTips(data.classified, summary, data.budgets), [data.classified, summary, data.budgets]);
   const recurring = useMemo(() => findRecurring(data.classified, month), [data.classified, month]);
@@ -111,6 +141,12 @@ function Main({ me }: { me: Me | null }) {
           </div>
           <div className="topbar-right">
             {!empty && (
+              <div className="period" role="group" aria-label="Time period">
+                <button className={period === "month" ? "on" : ""} aria-pressed={period === "month"} onClick={() => setPeriod("month")}>Month</button>
+                <button className={period === "ytd" ? "on" : ""} aria-pressed={period === "ytd"} onClick={() => setPeriod("ytd")}>Year</button>
+              </div>
+            )}
+            {!empty && (
               <select className="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
                 {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
               </select>
@@ -138,9 +174,9 @@ function Main({ me }: { me: Me | null }) {
         {empty && !["accounts", "learn", "categories", "settings", "bills", "insights"].includes(tab) ? (
           <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
         ) : tab === "overview" ? (
-          <Overview data={data} summary={summary} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
+          <Overview data={data} summary={periodSummary} ytd={ytdSummary} previous={previousSummary} periodLabel={periodLabel} period={period} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
         ) : tab === "transactions" ? (
-          <Transactions key={JSON.stringify(txFilter)} data={data} month={month} filter={txFilter} />
+          <Transactions key={JSON.stringify(txFilter)} data={data} months={periodMonths} periodLabel={periodLabel} filter={txFilter} />
         ) : tab === "insights" ? (
           <div className="stack">
             <Goals data={data} />

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { monthLabel, usd } from "../format";
-import { billsForMonth, billTotals, suggestBills, type Bill, type BillOccurrence, type BillStatus } from "../lib/bills";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { usePalette } from "../colors";
+import { billsForMonth, billsYearToDate, billTotals, suggestBills, type Bill, type BillOccurrence, type BillStatus, type BillYearMonth } from "../lib/bills";
 import { spendingCategories } from "../lib/categories";
 import { isDebt } from "../lib/networth";
 import type { AppData } from "../useAppData";
@@ -67,6 +69,8 @@ export function Bills({ data, month }: { data: AppData; month: string }) {
           </p>
         )}
       </section>
+
+      <BillsYear rows={billsYearToDate(data.bills, data.classified, month, today)} year={month.slice(0, 4)} />
 
       {occ.length > 0 && (
         <section className="card">
@@ -256,5 +260,54 @@ function BillForm({ data, initial, onSave, onDelete }: { data: AppData; initial?
         {onDelete && <button type="button" className="link small bad" onClick={onDelete}>Delete bill</button>}
       </div>
     </form>
+  );
+}
+
+function BillsYear({ rows, year }: { rows: BillYearMonth[]; year: string }) {
+  const pal = usePalette();
+  if (rows.length < 1) return null;
+  const paid = rows.reduce((a, r) => a + r.paid, 0);
+  const onTime = rows.reduce((a, r) => a + r.onTime, 0);
+  const late = rows.reduce((a, r) => a + r.late, 0);
+  const missed = rows.reduce((a, r) => a + r.missed, 0);
+  const total = onTime + late + missed;
+  const data = rows.map((r) => ({
+    month: new Date(`${r.month}-15T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+    Paid: Math.round(r.paid),
+    "Not paid": Math.round(r.unpaid),
+  }));
+  return (
+    <section className="card">
+      <h2>Bills in {year} so far</h2>
+      <div className="debt-totals bill-totals">
+        <div><span className="muted small">Paid this year</span><strong>{usd(paid)}</strong></div>
+        <div>
+          <span className="muted small">On time</span>
+          <strong className={onTime === total ? "good" : undefined}>{total ? `${onTime} of ${total}` : "—"}</strong>
+        </div>
+        <div>
+          <span className="muted small">Late or missed</span>
+          <strong className={late + missed ? "bad" : "good"}>{late + missed}</strong>
+        </div>
+      </div>
+      <div className="chart" role="img" aria-label={`Bills paid per month in ${year}`}>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={data} barCategoryGap="30%">
+            <CartesianGrid vertical={false} stroke={pal.grid} />
+            <XAxis dataKey="month" tickLine={false} axisLine={{ stroke: pal.axis }} tick={{ fill: pal.muted, fontSize: 12 }} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fill: pal.muted, fontSize: 12 }} tickFormatter={(v) => usd(v)} width={60} />
+            <Tooltip
+              cursor={{ fill: pal.grid, opacity: 0.5 }}
+              formatter={(v) => usd(Number(v))}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)" }}
+            />
+            <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: "var(--text-2)" }}>{v}</span>} />
+            <Bar dataKey="Paid" stackId="b" fill="#12a150" isAnimationActive={false} maxBarSize={36} />
+            <Bar dataKey="Not paid" stackId="b" fill="#d92d20" radius={[3, 3, 0, 0]} isAnimationActive={false} maxBarSize={36} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="muted small">Based on the bills you track now, for months with transactions in the app.</p>
+    </section>
   );
 }

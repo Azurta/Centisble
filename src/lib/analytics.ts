@@ -67,6 +67,38 @@ export function summarize(all: ClassifiedTransaction[], month: string): MonthSum
   };
 }
 
+/** Months from January of `month`'s year through `month`, e.g. "2026-03" → ["2026-01", "2026-02", "2026-03"]. */
+export function ytdMonths(month: string): string[] {
+  const [y, m] = month.split("-").map(Number);
+  return Array.from({ length: m }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
+}
+
+/** Add up several months into one summary (used for "Year to date"). `month` is set to the last month. */
+export function summarizeMonths(all: ClassifiedTransaction[], months: string[]): MonthSummary {
+  const parts = months.map((m) => summarize(all, m));
+  const sum = (k: keyof MonthSummary) => parts.reduce((a, p) => a + (p[k] as number), 0);
+  const byCategory: Partial<Record<CategoryId, number>> = {};
+  for (const p of parts) for (const [c, v] of Object.entries(p.byCategory)) byCategory[c] = (byCategory[c] ?? 0) + (v ?? 0);
+  const income = sum("income");
+  const spending = sum("spending");
+  const saved = sum("saved");
+  return {
+    month: months[months.length - 1],
+    income,
+    spending,
+    saved,
+    interestPaid: sum("interestPaid"),
+    naiveOutflow: sum("naiveOutflow"),
+    transfersExcluded: sum("transfersExcluded"),
+    leftOver: income - spending - saved,
+    savingsRate: income > 0 ? (income - spending) / income : 0,
+    byCategory,
+    needs: sum("needs"),
+    wants: sum("wants"),
+    txCount: sum("txCount"),
+  };
+}
+
 export function trend(all: ClassifiedTransaction[], count = 6): MonthSummary[] {
   return monthsIn(all).slice(0, count).reverse().map((m) => summarize(all, m));
 }

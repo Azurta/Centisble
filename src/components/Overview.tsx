@@ -58,7 +58,15 @@ export interface Nav {
 
 interface Props {
   data: AppData;
+  /** Totals for the chosen period (a month, or the year so far). */
   summary: MonthSummary;
+  /** January through the selected month, shown as a quick "year so far" line. */
+  ytd?: MonthSummary;
+  /** The period to compare against (last month, or the same months last year). */
+  previous?: MonthSummary;
+  period: "month" | "ytd";
+  /** e.g. "September" or "2026 so far". */
+  periodLabel: string;
   history: MonthSummary[];
   score: MoneyScore;
   tips: Tip[];
@@ -140,11 +148,11 @@ function Customize({ layout, onChange }: { layout: HomeWidget[]; onChange: (l: H
 
 /* ------------------------------------------------------------------ */
 
-function SpendingWidget({ summary: s, nav }: Props) {
+function SpendingWidget({ summary: s, nav, periodLabel }: Props) {
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Where your money went</h2>
+        <h2>Where your money went <span className="period-tag">{periodLabel}</span></h2>
         <button className="link" onClick={() => nav.transactions({ view: "spending" })}>See all →</button>
       </div>
       <Donut
@@ -158,14 +166,40 @@ function SpendingWidget({ summary: s, nav }: Props) {
   );
 }
 
-function SnapshotWidget({ summary: s, nw, nav }: Props) {
+/** "+12% vs Aug" style change; for spending, going up is bad. */
+function Delta({ now, before, upIsGood, vs }: { now: number; before?: number; upIsGood: boolean; vs: string }) {
+  if (before == null || before <= 0 || now < 0) return null;
+  const change = (now - before) / before;
+  if (Math.abs(change) < 0.005) return <span className="delta flat">Same as {vs}</span>;
+  const good = change > 0 === upIsGood;
+  return (
+    <span className={`delta ${good ? "up-good" : "up-bad"}`}>
+      <span aria-hidden>{change > 0 ? "▲" : "▼"}</span> {Math.abs(Math.round(change * 100))}% vs {vs}
+    </span>
+  );
+}
+
+function SnapshotWidget({ summary: s, previous, ytd, nw, nav, period, periodLabel }: Props) {
   const left = s.income - s.spending;
+  const vs = period === "ytd" ? "last year" : "last month";
   const hasBalances = nw.assets.length + nw.debts.length > 0;
   return (
     <section className="card snapshot">
       <div className="tiles">
-        <Tile label="Income" value={usd(s.income)} hint="this month" onClick={() => nav.transactions({ view: "income" })} />
-        <Tile label="Expenses" value={usd(s.spending)} hint="real spending this month" onClick={() => nav.transactions({ view: "spending" })} />
+        <Tile
+          label="Income"
+          value={usd(s.income)}
+          hint={periodLabel}
+          extra={<Delta now={s.income} before={previous?.income} upIsGood vs={vs} />}
+          onClick={() => nav.transactions({ view: "income" })}
+        />
+        <Tile
+          label="Expenses"
+          value={usd(s.spending)}
+          hint={periodLabel}
+          extra={<Delta now={s.spending} before={previous?.spending} upIsGood={false} vs={vs} />}
+          onClick={() => nav.transactions({ view: "spending" })}
+        />
         <Tile
           label="You own"
           value={hasBalances ? usd(nw.totalAssets) : "—"}
@@ -183,11 +217,19 @@ function SnapshotWidget({ summary: s, nw, nav }: Props) {
       </div>
       <dl className="snapshot-lines">
         <div>
-          <dt>Left over this month</dt>
+          <dt>Left over ({periodLabel})</dt>
           <dd className={left < 0 ? "bad" : "good"}>
             {usd(left)} {s.income > 0 && <span className="muted small">({pct(Math.max(0, s.savingsRate))} kept)</span>}
           </dd>
         </div>
+        {period === "month" && ytd && ytd.income + ytd.spending > 0 && (
+          <div>
+            <dt>{ytd.month.slice(0, 4)} so far</dt>
+            <dd>
+              {usd(ytd.income)} <span className="muted small">in</span> · {usd(ytd.spending)} <span className="muted small">spent</span>
+            </dd>
+          </div>
+        )}
         {hasBalances && (
           <div>
             <dt>Net worth</dt>
@@ -207,11 +249,12 @@ function SnapshotWidget({ summary: s, nw, nav }: Props) {
   );
 }
 
-function Tile({ label, value, hint, tone, onClick }: { label: string; value: string; hint?: string; tone?: "good" | "bad"; onClick: () => void }) {
+function Tile({ label, value, hint, tone, extra, onClick }: { label: string; value: string; hint?: string; tone?: "good" | "bad"; extra?: ReactNode; onClick: () => void }) {
   return (
     <button className="tile" onClick={onClick}>
       <span className="muted small">{label}</span>
       <strong className={tone}>{value}</strong>
+      {extra}
       {hint && <span className="muted small">{hint} ›</span>}
     </button>
   );
@@ -369,11 +412,11 @@ function ScoreWidget({ score, tips, nav }: Props) {
   );
 }
 
-function RealSpendingWidget({ summary: s }: Props) {
+function RealSpendingWidget({ summary: s, periodLabel }: Props) {
   if (s.naiveOutflow - s.spending - s.saved <= 1) return null;
   return (
     <section className="card">
-      <h2>Your real spending</h2>
+      <h2>Your real spending <span className="period-tag">{periodLabel}</span></h2>
       <div className="compare">
         <div>
           <span className="muted small">Every withdrawal added up</span>
@@ -411,7 +454,7 @@ function TrendWidget({ history }: Props) {
               formatter={(v) => usd(Number(v))}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)" }}
             />
-            <Legend iconType="circle" wrapperStyle={{ fontSize: 13 }} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: 13 }} formatter={(v) => <span style={{ color: "var(--text-2)" }}>{v}</span>} />
             <Bar dataKey="Income" fill={pal.series[0]} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
             <Bar dataKey="Spending" fill={pal.series[1]} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
           </BarChart>

@@ -9,6 +9,7 @@ import type { SheetBalance } from "./lib/budgetSheet";
 import type { HomeWidget } from "./components/Overview";
 import type { Bill } from "./lib/bills";
 import type { Goal } from "./lib/goals";
+import { DEFAULT_APPEARANCE, type Appearance } from "./appearance";
 import type { Account, AccountEdits, Budgets, CategoryId, Overrides, Transaction, TxKind } from "./lib/types";
 
 /** Hosted build without the sync server: spreadsheets, CSVs and manual entries only. */
@@ -40,6 +41,7 @@ export function useAppData() {
   const [videos, setVideos] = usePersisted<{ url: string; title: string }[]>("azurta.videos", []);
   const [bills, setBills] = usePersisted<Bill[]>("azurta.bills", []);
   const [goals, setGoals] = usePersisted<Goal[]>("azurta.goals", []);
+  const [appearance, setAppearance] = usePersisted<Appearance>("azurta.appearance", DEFAULT_APPEARANCE);
 
   const [server, setServer] = useState<LocalData>({ accounts: [], transactions: [] });
   const [status, setStatus] = useState<ServerStatus | null>(null);
@@ -65,7 +67,7 @@ export function useAppData() {
   /* ---- Settings shared across devices (stored on your server) ---- */
   // tz lets the server send bill reminders at a sensible local time.
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const settings = { local, overrides, budgets, categories, alertAt, accountEdits, homeLayout, lessonsDone, videos, bills, goals, tz };
+  const settings = { local, overrides, budgets, categories, alertAt, accountEdits, homeLayout, lessonsDone, videos, bills, goals, appearance, tz };
   const settingsJson = JSON.stringify(settings);
   const lastSynced = useRef<string | null>(null);
   const [settingsReady, setSettingsReady] = useState(false);
@@ -85,6 +87,7 @@ export function useAppData() {
     if (r.videos) setVideos(r.videos);
     if (r.bills) setBills(r.bills);
     if (r.goals) setGoals(r.goals);
+    if (r.appearance) setAppearance(r.appearance);
     lastSynced.current = JSON.stringify({ ...settings, ...r });
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,7 +279,7 @@ export function useAppData() {
 
   return {
     accounts, classified, overrides, budgets, setBudgets,
-    accountEdits, addManualAccount, updateAccount, homeLayout, setHomeLayout, bills, setBills, goals, setGoals,
+    accountEdits, addManualAccount, updateAccount, homeLayout, setHomeLayout, bills, setBills, goals, setGoals, appearance, setAppearance,
     categories, reorderCategories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
     setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,

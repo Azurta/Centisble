@@ -3,12 +3,14 @@ import { api, type Me } from "../api";
 import { APP_NAME } from "../brand";
 import { canPromptInstall, disablePush, enablePush, isStandalone, onInstallAvailable, platform, promptInstall, pushState, type PushState } from "../pwa";
 import type { AppData } from "../useAppData";
+import { ACCENTS, type AccentId, type ThemeChoice } from "../appearance";
 import { signOut } from "./Auth";
 
 export function Settings({ me, data }: { me: Me | null; data: AppData }) {
   return (
     <div className="settings-grid">
       {me?.user?.role === "owner" && <Family me={me} data={data} />}
+      <AppearanceCard data={data} />
       {me?.user && <YourAccount me={me} />}
       <InstallApp />
       {me?.user && <Notifications data={data} />}
@@ -316,5 +318,43 @@ function AllowedEmails({ initial }: { initial: string[] }) {
       )}
       {msg && <p className="small">{msg}</p>}
     </div>
+  );
+}
+
+function AppearanceCard({ data }: { data: AppData }) {
+  const a = data.appearance;
+  const set = (patch: Partial<typeof a>) => data.setAppearance({ ...a, ...patch });
+  return (
+    <section className="card">
+      <h2>Appearance</h2>
+      <p className="muted small">Saved to your account, so your phone and computer match.</p>
+      <div className="field">
+        Theme
+        <div className="segmented" role="radiogroup" aria-label="Theme">
+          {(["system", "light", "dark"] as ThemeChoice[]).map((t) => (
+            <button key={t} role="radio" aria-checked={a.theme === t} className={a.theme === t ? "on" : ""} onClick={() => set({ theme: t })}>
+              {t === "system" ? "Match device" : t === "light" ? "Light" : "Dark"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field mt-s">
+        Accent color
+        <div className="swatches" role="radiogroup" aria-label="Accent color">
+          {(Object.keys(ACCENTS) as AccentId[]).map((id) => (
+            <button
+              key={id}
+              role="radio"
+              aria-checked={a.accent === id}
+              aria-label={ACCENTS[id].label}
+              title={ACCENTS[id].label}
+              className={`swatch-btn ${a.accent === id ? "on" : ""}`}
+              style={{ background: `linear-gradient(135deg, ${ACCENTS[id].light} 50%, ${ACCENTS[id].dark} 50%)` }}
+              onClick={() => set({ accent: id })}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

@@ -137,3 +137,42 @@ export function suggestBills(txs: ClassifiedTransaction[], accounts: Account[], 
   }
   return out;
 }
+
+export interface BillYearMonth {
+  month: string;
+  paid: number;
+  unpaid: number;
+  onTime: number;
+  late: number;
+  missed: number;
+}
+
+/**
+ * Bills month by month from January through `month`, for months you have data for.
+ * "missed" = unpaid in a month that's already over; "late" = paid after the due date.
+ */
+export function billsYearToDate(bills: Bill[], txs: ClassifiedTransaction[], month: string, today = new Date()): BillYearMonth[] {
+  if (!bills.length) return [];
+  const have = new Set(txs.map((t) => monthOf(t.date)));
+  const [y, m] = month.split("-").map(Number);
+  const current = today.toISOString().slice(0, 7);
+  const out: BillYearMonth[] = [];
+  for (let i = 1; i <= m; i++) {
+    const mm = `${y}-${String(i).padStart(2, "0")}`;
+    if (!have.has(mm)) continue;
+    const occ = billsForMonth(bills, txs, mm, today);
+    const row: BillYearMonth = { month: mm, paid: 0, unpaid: 0, onTime: 0, late: 0, missed: 0 };
+    for (const o of occ) {
+      if (o.payment) {
+        row.paid += Math.abs(o.payment.amount);
+        if (o.payment.date <= o.date) row.onTime++;
+        else row.late++;
+      } else {
+        row.unpaid += o.bill.amount;
+        if (mm < current) row.missed++;
+      }
+    }
+    out.push(row);
+  }
+  return out;
+}
