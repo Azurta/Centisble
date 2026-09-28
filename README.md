@@ -49,7 +49,8 @@ Open your Render URL, sign in, and install it (see "Install it as an app"). Cate
 Everyone signs in with their own email and password and sees **only their own** banks, budgets and settings.
 
 - **The first account created on a server is the owner.** When you update from the single-user version, your existing data moves into it.
-- **Invite people:** Settings → Family & friends → **Copy link**, and send it. The link carries an invite code, so only people you invite can sign up. **Make a new link** stops the old one working.
+- **Invite people:** in Settings → Family & friends, either **add their email** (they then sign up at your address with Google or a password, no code needed), or **copy the invite link** and send it. Only people you add or invite can sign up. **Make a new link** stops the old one working.
+- **Continue with Google** appears on the sign-in screen once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. In Google Cloud Console, create an OAuth client of type *Web application* with the redirect URI `https://<your site>/api/auth/google/callback`. Sign in with Apple needs a paid Apple Developer account, and passwordless email codes need a domain plus an email service; both are planned for later.
 - **Forgotten password:** the owner can set a temporary one under Settings → People.
 - **Leaving:** Settings → Delete account disconnects that person's banks at Plaid and erases their data.
 - **Plaid's free Trial allows 10 bank connections in total for the whole app.** Settings shows how many are used. After that, people can use SimpleFIN, or you move to Plaid's paid plan.

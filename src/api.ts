@@ -21,8 +21,12 @@ export interface User {
 export interface Me {
   user: User | null;
   firstRun: boolean;
+  /** "Continue with Google" is set up on this server. */
+  google: boolean;
   invite?: string;
   members?: User[];
+  allowedEmails?: string[];
+  hasPassword?: boolean;
 }
 
 export interface ServerStatus {
@@ -41,6 +45,8 @@ export const api = {
   login: (email: string, password: string) => post<{ user: User }>("/api/auth/login", { email, password }),
   logout: () => post<{ ok: boolean }>("/api/auth/logout"),
   changePassword: (current: string, next: string) => post<{ ok: boolean }>("/api/auth/password", { current, next }),
+  addAllowedEmail: (email: string) => post<{ allowedEmails: string[] }>("/api/auth/allowed", { email }),
+  removeAllowedEmail: (email: string) => call<{ allowedEmails: string[] }>(`/api/auth/allowed/${encodeURIComponent(email)}`, { method: "DELETE" }),
   rotateInvite: () => post<{ invite: string }>("/api/auth/invite/rotate"),
   resetMemberPassword: (id: string, password: string) => post<{ ok: boolean }>(`/api/auth/members/${id}/password`, { password }),
   deleteAccount: (password: string) => post<{ ok: boolean }>("/api/auth/delete", { password }),

@@ -37,7 +37,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  /** Empty for people who only sign in with Google. */
   passwordHash: string;
+  /** Google account id, once they've used "Continue with Google". */
+  googleSub?: string;
   role: "owner" | "member";
   createdAt: string;
 }
@@ -63,6 +66,8 @@ interface Store {
   data: Record<string, UserData>;
   /** Invite code family members need to sign up. The owner can change it. */
   inviteCode: string;
+  /** Emails the owner has approved; they can sign up without an invite code. */
+  allowedEmails: string[];
   /** Plaid connections ever created (the Trial plan counts creations, not current connections). */
   plaidItemsCreated: number;
   push: PushSubscriptionRecord[];
@@ -82,7 +87,7 @@ function load(): Store {
   } catch {
     /* first run */
   }
-  const base: Store = { version: 2, users: [], sessions: [], data: {}, inviteCode: randomToken(9), plaidItemsCreated: 0, push: [] };
+  const base: Store = { version: 2, users: [], sessions: [], data: {}, inviteCode: randomToken(9), allowedEmails: [], plaidItemsCreated: 0, push: [] };
   if (!raw) return base;
   if (raw.version === 2) return { ...base, ...(raw as unknown as Store) };
   // Single-user file from before accounts existed: keep it for whoever signs up first.

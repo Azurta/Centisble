@@ -5,11 +5,14 @@ import {
   changePassword,
   clearFailures,
   deleteUser,
+  addAllowedEmail,
   endSession,
+  googleSignIn,
   loadUser,
   login,
   publicUser,
   recordFailure,
+  removeAllowedEmail,
   requireUser,
   resetMemberPassword,
   rotateInvite,
@@ -17,6 +20,7 @@ import {
   startSession,
   tooManyAttempts,
 } from "./auth";
+import { finishGoogle, googleEnabled, startGoogle } from "./google";
 import { decryptSecret, encryptSecret, openExport, sealExport, type SealedExport } from "./crypto";
 import { createLinkToken, exchangePublicToken, plaidConfigured, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
 import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
@@ -85,9 +89,29 @@ app.get("/api/auth/me", (req, res) => {
     user: u ? publicUser(u) : null,
     // Lets the sign-in screen offer "create the first account" on a brand-new server.
     firstRun: store.users.length === 0,
+    google: googleEnabled(),
     invite: u?.role === "owner" ? store.inviteCode : undefined,
     members: u?.role === "owner" ? store.users.map(publicUser) : undefined,
+    allowedEmails: u?.role === "owner" ? store.allowedEmails : undefined,
+    hasPassword: u ? Boolean(u.passwordHash) : undefined,
   });
+});
+
+/* ---- Continue with Google ---- */
+app.get("/api/auth/google/start", (req, res) => {
+  if (!googleEnabled()) return res.redirect("/?signin_error=" + encodeURIComponent("Google sign-in isn't set up on this server yet."));
+  startGoogle(req, res);
+});
+app.get("/api/auth/google/callback", async (req, res) => {
+  try {
+    const { identity, invite } = await finishGoogle(req, res);
+    const r = googleSignIn(identity, invite);
+    if (!r.ok) return res.redirect("/?signin_error=" + encodeURIComponent(r.error));
+    startSession(res, r.user.id);
+    res.redirect("/");
+  } catch (e) {
+    res.redirect("/?signin_error=" + encodeURIComponent((e as Error).message));
+  }
 });
 
 app.post("/api/auth/signup", (req, res) => {
@@ -131,6 +155,16 @@ const requireOwner = (req: Request, res: Response, next: () => void) =>
 
 app.post("/api/auth/invite/rotate", requireUser, requireOwner, (_req, res) => res.json({ invite: rotateInvite() }));
 
+app.post("/api/auth/allowed", requireUser, requireOwner, (req, res) => {
+  const err = addAllowedEmail(String(req.body?.email ?? ""));
+  if (err) return res.status(400).json({ error: err });
+  res.json({ allowedEmails: store.allowedEmails });
+});
+app.delete("/api/auth/allowed/:email", requireUser, requireOwner, (req, res) => {
+  removeAllowedEmail(String(req.params.email));
+  res.json({ allowedEmails: store.allowedEmails });
+});
+
 app.post("/api/auth/members/:id/password", requireUser, requireOwner, (req, res) => {
   const err = resetMemberPassword(String(req.params.id), String(req.body?.password ?? ""));
   if (err) return res.status(400).json({ error: err });
@@ -140,7 +174,9 @@ app.post("/api/auth/members/:id/password", requireUser, requireOwner, (req, res)
 /** Delete your account: disconnects your banks at Plaid and erases everything stored for you. */
 app.post("/api/auth/delete", requireUser, async (req, res) => {
   const u = req.user!;
-  if (!login({ email: u.email, password: String(req.body?.password ?? "") })) return res.status(401).json({ error: "Password is incorrect." });
+  // Password accounts confirm with their password; Google-only accounts type DELETE.
+  const confirmed = u.passwordHash ? Boolean(login({ email: u.email, password: String(req.body?.password ?? "") })) : req.body?.password === "DELETE";
+  if (!confirmed) return res.status(401).json({ error: u.passwordHash ? "Password is incorrect." : "Type DELETE to confirm." });
   const ud = userData(u.id);
   await Promise.all(ud.items.map(removeItem));
   deleteUser(u.id);

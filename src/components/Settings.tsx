@@ -8,10 +8,10 @@ import { signOut } from "./Auth";
 export function Settings({ me, data }: { me: Me | null; data: AppData }) {
   return (
     <div className="settings-grid">
+      {me?.user?.role === "owner" && <Family me={me} data={data} />}
       {me?.user && <YourAccount me={me} />}
       <InstallApp />
       {me?.user && <Notifications data={data} />}
-      {me?.user?.role === "owner" && <Family me={me} data={data} />}
       {me?.user && <MoveData />}
       {!me?.user && (
         <section className="card">
@@ -39,7 +39,7 @@ function YourAccount({ me }: { me: Me }) {
       </dl>
       <div className="row">
         <button className="btn secondary" onClick={signOut}>Sign out</button>
-        <button className="link small" onClick={() => setOpen(open === "password" ? null : "password")}>Change password</button>
+        <button className="link small" onClick={() => setOpen(open === "password" ? null : "password")}>{me.hasPassword ? "Change password" : "Add a password"}</button>
         <button className="link small bad" onClick={() => setOpen(open === "delete" ? null : "delete")}>Delete account</button>
       </div>
       {open === "password" && (
@@ -47,7 +47,9 @@ function YourAccount({ me }: { me: Me }) {
           e.preventDefault();
           try { await api.changePassword(current, next); setMsg("Password changed."); setOpen(null); setCurrent(""); setNext(""); } catch (err) { setMsg((err as Error).message); }
         }}>
-          <label className="field">Current password<input id="pw-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} /></label>
+          {me.hasPassword && (
+            <label className="field">Current password<input id="pw-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} /></label>
+          )}
           <label className="field">New password<input id="pw-next" type="password" autoComplete="new-password" minLength={8} value={next} onChange={(e) => setNext(e.target.value)} /></label>
           <button className="btn self-start">Save password</button>
         </form>
@@ -58,7 +60,10 @@ function YourAccount({ me }: { me: Me }) {
           try { await api.deleteAccount(current); await signOut(); } catch (err) { setMsg((err as Error).message); }
         }}>
           <p className="small">This disconnects your banks and permanently erases your transactions, budgets and settings from {APP_NAME}. It can't be undone.</p>
-          <label className="field">Enter your password to confirm<input id="pw-delete" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} /></label>
+          <label className="field">
+            {me.hasPassword ? "Enter your password to confirm" : "Type DELETE to confirm"}
+            <input id="pw-delete" type={me.hasPassword ? "password" : "text"} autoComplete="off" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </label>
           <button className="btn danger self-start" disabled={!current}>Delete my account and data</button>
         </form>
       )}
@@ -152,9 +157,11 @@ function Family({ me, data }: { me: Me; data: AppData }) {
     <section className="card wide">
       <h2>Family & friends</h2>
       <p className="muted small">
-        Send this link to anyone you want to invite. They create their own login and connect their own banks. Nobody can see anyone else's
-        money, including you.
+        Everyone gets their own login and connects their own banks. Nobody can see anyone else's money, including you.
       </p>
+      <AllowedEmails initial={me.allowedEmails ?? []} />
+      <h3 className="mt">Or send an invite link</h3>
+      <p className="muted small">Anyone who opens this link can create an account.</p>
       <div className="copy-row">
         <input id="invite-link" readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Invite link" />
         <button
@@ -266,5 +273,48 @@ function MoveData() {
       </div>
       {msg && <p className="small">{msg}</p>}
     </section>
+  );
+}
+
+/** The easiest way in: add someone's email, and they sign up with Google or a password. No code needed. */
+function AllowedEmails({ initial }: { initial: string[] }) {
+  const [list, setList] = useState(initial);
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div>
+      <h3 className="mt-s">Add people by email</h3>
+      <p className="muted small">
+        Add their email here, then tell them to open <strong>{window.location.origin}</strong> and choose <strong>Create account</strong>, or
+        <strong> Continue with Google</strong> with that email.
+      </p>
+      <form
+        className="copy-row"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            setList((await api.addAllowedEmail(email)).allowedEmails);
+            setMsg(`Added. ${email} can now create an account.`);
+            setEmail("");
+          } catch (err) {
+            setMsg((err as Error).message);
+          }
+        }}
+      >
+        <input id="allow-email" type="email" placeholder="brother@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email to invite" />
+        <button className="btn secondary" disabled={!email.includes("@")}>Add</button>
+      </form>
+      {list.length > 0 && (
+        <ul className="list">
+          {list.map((e) => (
+            <li key={e}>
+              <span>{e} <span className="muted small">invited, hasn't joined yet</span></span>
+              <button className="link small" onClick={async () => setList((await api.removeAllowedEmail(e)).allowedEmails)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {msg && <p className="small">{msg}</p>}
+    </div>
   );
 }

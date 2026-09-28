@@ -29,7 +29,7 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 function setSessionCookie(res: Response, value: string, maxAgeSeconds: number) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`);
+  res.append("Set-Cookie", `${COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`);
 }
 
 export function startSession(res: Response, userId: string) {
@@ -85,23 +85,67 @@ const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
 export type SignupResult = { ok: true; user: User } | { ok: false; status: number; error: string };
 
+/** Who may create an account: the very first person, anyone with the invite code, or an email the owner approved. */
+export function mayJoin(email: string, invite?: string): boolean {
+  return store.users.length === 0 || (Boolean(invite) && invite === store.inviteCode) || store.allowedEmails.includes(normalizeEmail(email));
+}
+
 export function signup(body: { name?: string; email?: string; password?: string; invite?: string }): SignupResult {
   const email = normalizeEmail(String(body.email ?? ""));
   const name = String(body.name ?? "").trim() || email.split("@")[0];
   const password = String(body.password ?? "");
-  const first = store.users.length === 0;
   if (!validEmail(email)) return { ok: false, status: 400, error: "Enter a valid email address." };
   if (password.length < 8) return { ok: false, status: 400, error: "Use at least 8 characters for your password." };
-  if (!first && body.invite !== store.inviteCode) return { ok: false, status: 403, error: "That invite code isn't valid. Ask for a new invite link." };
+  if (!mayJoin(email, body.invite))
+    return { ok: false, status: 403, error: "This email hasn't been invited yet. Ask the owner to add your email in Settings, or use their invite link." };
   if (store.users.some((u) => u.email === email)) return { ok: false, status: 409, error: "An account with this email already exists. Sign in instead." };
 
-  const user: User = { id: crypto.randomUUID(), email, name, passwordHash: hashPassword(password), role: first ? "owner" : "member", createdAt: new Date().toISOString() };
+  return { ok: true, user: createUser(email, name, hashPassword(password)) };
+}
+
+function createUser(email: string, name: string, passwordHash: string, googleSub?: string): User {
+  const first = store.users.length === 0;
+  const user: User = { id: crypto.randomUUID(), email, name, passwordHash, googleSub, role: first ? "owner" : "member", createdAt: new Date().toISOString() };
   store.users.push(user);
+  store.allowedEmails = store.allowedEmails.filter((e) => e !== email);
   // The owner inherits data from the single-user version (banks already connected on this server).
   store.data[user.id] = first && store.legacy ? store.legacy : emptyUserData();
   if (first) store.legacy = undefined;
   save(true);
-  return { ok: true, user };
+  return user;
+}
+
+/**
+ * Sign in (or sign up) with a verified Google identity. Existing accounts with the same email are linked,
+ * so someone who first used a password can switch to Google.
+ */
+export function googleSignIn(g: { sub: string; email: string; name?: string }, invite?: string): SignupResult {
+  const email = normalizeEmail(g.email);
+  const existing = store.users.find((u) => u.googleSub === g.sub) ?? store.users.find((u) => u.email === email);
+  if (existing) {
+    if (!existing.googleSub) {
+      existing.googleSub = g.sub;
+      save();
+    }
+    return { ok: true, user: existing };
+  }
+  if (!mayJoin(email, invite))
+    return { ok: false, status: 403, error: "This Google account hasn't been invited yet. Ask the owner to add your email in Settings, or open their invite link first." };
+  return { ok: true, user: createUser(email, g.name?.split(" ")[0] || email.split("@")[0], "", g.sub) };
+}
+
+export function addAllowedEmail(email: string): string | undefined {
+  const e = normalizeEmail(email);
+  if (!validEmail(e)) return "Enter a valid email address.";
+  if (store.users.some((u) => u.email === e)) return "That person already has an account.";
+  if (!store.allowedEmails.includes(e)) store.allowedEmails.push(e);
+  save();
+  return undefined;
+}
+
+export function removeAllowedEmail(email: string) {
+  store.allowedEmails = store.allowedEmails.filter((e) => e !== normalizeEmail(email));
+  save();
 }
 
 export function login(body: { email?: string; password?: string }): User | undefined {
@@ -113,7 +157,8 @@ export function login(body: { email?: string; password?: string }): User | undef
 }
 
 export function changePassword(user: User, current: string, next: string): string | undefined {
-  if (!verifyPassword(current, user.passwordHash)) return "Your current password is incorrect.";
+  // Google-only accounts can add a password without a current one.
+  if (user.passwordHash && !verifyPassword(current, user.passwordHash)) return "Your current password is incorrect.";
   if (next.length < 8) return "Use at least 8 characters for your new password.";
   user.passwordHash = hashPassword(next);
   save();
