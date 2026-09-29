@@ -113,6 +113,7 @@ Bank CSV exports work too (**Import a bank CSV**). Import one file per account a
 - Bank access tokens and synced transactions are stored only on your machine, in `data/db.json` (file mode 600, git-ignored).
 - Imports, category fixes, budgets, and lesson progress are kept in your browser's local storage.
 - Each person has their own account; the server keeps everyone's data separate and encrypts bank connections.
+- The public **Privacy Policy** and **Terms of Service** are at `/privacy` and `/terms` (linked from sign-up and Settings). Before inviting people, set `CONTACT_EMAIL` (and later `OPERATOR`, your LLC's name) in `src/brand.ts`, and paste the `/privacy` link into the Plaid dashboard. They're plain-language drafts, not legal advice; have a lawyer look them over before you charge money.
 
 ## Development
 

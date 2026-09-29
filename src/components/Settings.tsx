@@ -21,6 +21,11 @@ export function Settings({ me, data }: { me: Me | null; data: AppData }) {
           <p className="muted small">This copy runs on this device only. Sign-in, family sharing and notifications work once the app is running on your server.</p>
         </section>
       )}
+      <section className="card">
+        <h2>Privacy &amp; terms</h2>
+        <p className="muted small">How your data is used, and the rules for using the app.</p>
+        <p className="small"><a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms of Service</a></p>
+      </section>
     </div>
   );
 }

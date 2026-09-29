@@ -151,6 +151,12 @@ function AuthScreen({ firstRun, google, onDone }: { firstRun: boolean; google: b
             </label>
           )}
           {error && <p className="small bad">{error}</p>}
+          {mode === "signup" && (
+            <p className="muted small">
+              By creating an account you agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms of Service</a> and{" "}
+              <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
+            </p>
+          )}
           <button className="btn" disabled={busy}>{busy ? "One moment…" : mode === "signin" ? "Sign in" : "Create account"}</button>
           {!firstRun && (
             <p className="small">
@@ -161,6 +167,7 @@ function AuthScreen({ firstRun, google, onDone }: { firstRun: boolean; google: b
             </p>
           )}
           {mode === "signin" && <p className="muted small">Forgot your password? Ask the person who invited you to set a temporary one.</p>}
+          <p className="muted small"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
         </form>
       </div>
     </div>

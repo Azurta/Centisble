@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_NAME } from "./brand";
 import { Accounts } from "./components/Accounts";
 import { AuthGate } from "./components/Auth";
+import { LegalPage, legalDocFor } from "./components/Legal";
 import { showLocalNotification } from "./pwa";
 import { useApplyAppearance } from "./appearance";
 import { Settings } from "./components/Settings";
@@ -37,6 +38,8 @@ const TABS = [
 type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
+  const legal = legalDocFor(window.location.pathname);
+  if (legal) return <LegalPage doc={legal} />;
   return <AuthGate>{(me) => <Main me={me} />}</AuthGate>;
 }
 
