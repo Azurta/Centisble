@@ -30,6 +30,8 @@ export async function signOut() {
 export function AuthGate({ children }: { children: (me: Me | null) => ReactNode }) {
   const [me, setMe] = useState<Me | null | undefined>(STATIC ? null : undefined);
   const [offline, setOffline] = useState(false);
+  /* The hosted app briefly can't reach its server (e.g. Render restarting during an update): wait and retry. */
+  const [reconnecting, setReconnecting] = useState(false);
 
   const load = () =>
     api
@@ -50,16 +52,38 @@ export function AuthGate({ children }: { children: (me: Me | null) => ReactNode 
             /* ignore */
           }
         }
+        setReconnecting(false);
         setMe(m);
       })
       .catch(() => {
-        setOffline(true);
-        setMe(null);
+        // Only a local copy with no server at all (development) runs in this-device-only mode.
+        if (import.meta.env.DEV) {
+          setOffline(true);
+          setMe(null);
+        } else setReconnecting(true);
       });
 
   useEffect(() => {
     if (!STATIC) load();
   }, []);
+  useEffect(() => {
+    if (!reconnecting) return;
+    const t = setTimeout(load, 5000);
+    return () => clearTimeout(t);
+  }, [reconnecting]);
+
+  if (reconnecting)
+    return (
+      <div className="shell">
+        <div className="app">
+          <div className="card unlock">
+            <h1>Reconnecting…</h1>
+            <p className="muted small">{APP_NAME} is updating or your connection dropped. This usually takes under a minute; it will reconnect by itself.</p>
+            <button className="btn secondary" onClick={load}>Try again now</button>
+          </div>
+        </div>
+      </div>
+    );
 
   if (me === undefined) return <div className="shell"><div className="app muted">Loading…</div></div>;
   if (STATIC || offline) return <>{children(null)}</>;
