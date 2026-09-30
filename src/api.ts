@@ -23,6 +23,8 @@ export interface Me {
   firstRun: boolean;
   /** "Continue with Google" is set up on this server. */
   google: boolean;
+  /** "Forgot password?" can email a reset link. */
+  email?: boolean;
   invite?: string;
   members?: User[];
   allowedEmails?: string[];
@@ -43,6 +45,8 @@ export const api = {
   me: () => call<Me>("/api/auth/me"),
   signup: (body: { name: string; email: string; password: string; invite?: string }) => post<{ user: User }>("/api/auth/signup", body),
   login: (email: string, password: string) => post<{ user: User }>("/api/auth/login", { email, password }),
+  forgot: (email: string) => post<{ ok: boolean }>("/api/auth/forgot", { email }),
+  resetPassword: (token: string, password: string) => post<{ user: User }>("/api/auth/reset", { token, password }),
   logout: () => post<{ ok: boolean }>("/api/auth/logout"),
   changePassword: (current: string, next: string) => post<{ ok: boolean }>("/api/auth/password", { current, next }),
   addAllowedEmail: (email: string) => post<{ allowedEmails: string[] }>("/api/auth/allowed", { email }),

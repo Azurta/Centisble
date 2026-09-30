@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   changePassword,
   clearFailures,
+  createPasswordReset,
+  finishPasswordReset,
   deleteUser,
   addAllowedEmail,
   endSession,
@@ -20,6 +22,7 @@ import {
   startSession,
   tooManyAttempts,
 } from "./auth";
+import { emailEnabled, sendEmail } from "./email";
 import { finishGoogle, googleEnabled, publicOrigin, startGoogle } from "./google";
 import { decryptSecret, encryptSecret, openExport, randomToken, sealExport, type SealedExport } from "./crypto";
 import { billsCalendar } from "../src/lib/ics";
@@ -94,6 +97,8 @@ app.get("/api/auth/me", (req, res) => {
     // Lets the sign-in screen offer "create the first account" on a brand-new server.
     firstRun: store.users.length === 0,
     google: googleEnabled(),
+    // "Forgot password?" can email a reset link.
+    email: emailEnabled(),
     invite: u?.role === "owner" ? store.inviteCode : undefined,
     members: u?.role === "owner" ? store.users.map(publicUser) : undefined,
     allowedEmails: u?.role === "owner" ? store.allowedEmails : undefined,
@@ -141,6 +146,38 @@ app.post("/api/auth/login", (req, res) => {
   clearFailures(key);
   startSession(res, user.id);
   res.json({ user: publicUser(user) });
+});
+
+/* Forgot password: always answers the same way, so it can't be used to find out who has an account. */
+app.post("/api/auth/forgot", (req, res) => {
+  if (!emailEnabled()) return res.status(400).json({ error: "Password emails aren't set up here yet. Ask the person who invited you to set a temporary password." });
+  const key = `forgot:${req.ip}`;
+  if (tooManyAttempts(key)) return res.status(429).json({ error: "Too many requests. Try again in 15 minutes." });
+  recordFailure(key); // counts every request: at most 10 emails per 15 minutes from one place
+  const made = createPasswordReset(String(req.body?.email ?? ""));
+  if (made) {
+    const link = `${publicOrigin(req)}/?reset=${encodeURIComponent(made.token)}`;
+    const hi = made.user.name ? `Hi ${made.user.name},` : "Hi,";
+    sendEmail(
+      made.user.email,
+      `Reset your ${APP_NAME} password`,
+      `${hi}\n\nUse this link to choose a new ${APP_NAME} password. It works for one hour:\n${link}\n\nIf you didn't ask for this, you can ignore this email; your password stays the same.`,
+      `<p>${hi}</p><p>Use this link to choose a new ${APP_NAME} password. It works for one hour.</p><p><a href="${link}">Choose a new password</a></p><p style="color:#667">If you didn't ask for this, you can ignore this email; your password stays the same.</p>`,
+    ).catch((e) => console.error("[email]", (e as Error).message));
+  }
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/reset", (req, res) => {
+  const key = `reset:${req.ip}`;
+  if (tooManyAttempts(key)) return res.status(429).json({ error: "Too many attempts. Try again in 15 minutes." });
+  const r = finishPasswordReset(String(req.body?.token ?? ""), String(req.body?.password ?? ""));
+  if (!r.ok) {
+    recordFailure(key);
+    return res.status(400).json({ error: r.error });
+  }
+  startSession(res, r.user.id);
+  res.json({ user: publicUser(r.user) });
 });
 
 app.post("/api/auth/logout", (req, res) => {

@@ -75,6 +75,8 @@ interface Store {
   /** Plaid connections ever created (the Trial plan counts creations, not current connections). */
   plaidItemsCreated: number;
   push: PushSubscriptionRecord[];
+  /** Password-reset links sent by email (only a hash of each link's secret is kept; they expire after an hour). */
+  resets?: { idHash: string; userId: string; expiresAt: string }[];
   vapid?: { publicKey: string; privateKey: string };
   /** Data from the single-user version, handed to the first account created. */
   legacy?: UserData;

@@ -165,6 +165,36 @@ export function changePassword(user: User, current: string, next: string): strin
   return undefined;
 }
 
+/* ---- Forgot password: a one-hour link sent by email ---- */
+const RESET_MINUTES = 60;
+
+/** Makes a reset link secret for this email's account, or nothing if there's no such account. */
+export function createPasswordReset(email: string): { user: User; token: string } | undefined {
+  const user = store.users.find((u) => u.email === email.trim().toLowerCase());
+  if (!user) return undefined;
+  const token = randomToken();
+  const now = new Date().toISOString();
+  store.resets = (store.resets ?? [])
+    .filter((r) => r.expiresAt > now && r.userId !== user.id) // one live link per person
+    .concat({ idHash: sha256(token), userId: user.id, expiresAt: new Date(Date.now() + RESET_MINUTES * 60_000).toISOString() });
+  save();
+  return { user, token };
+}
+
+/** Sets the new password from a reset link. Signs the person out everywhere else. */
+export function finishPasswordReset(token: string, password: string): { ok: true; user: User } | { ok: false; error: string } {
+  const h = sha256(String(token));
+  const r = (store.resets ?? []).find((x) => x.idHash === h && x.expiresAt > new Date().toISOString());
+  const user = r && store.users.find((u) => u.id === r.userId);
+  if (!user) return { ok: false, error: "This reset link has expired or was already used. Ask for a new one." };
+  if (String(password).length < 8) return { ok: false, error: "Use at least 8 characters for your new password." };
+  user.passwordHash = hashPassword(String(password));
+  store.resets = (store.resets ?? []).filter((x) => x.userId !== user.id);
+  store.sessions = store.sessions.filter((s) => s.userId !== user.id);
+  save();
+  return { ok: true, user };
+}
+
 /** The owner can set a temporary password for a family member who forgot theirs. */
 export function resetMemberPassword(memberId: string, temp: string): string | undefined {
   const m = store.users.find((u) => u.id === memberId);
