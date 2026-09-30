@@ -20,8 +20,11 @@ import {
   startSession,
   tooManyAttempts,
 } from "./auth";
-import { finishGoogle, googleEnabled, startGoogle } from "./google";
-import { decryptSecret, encryptSecret, openExport, sealExport, type SealedExport } from "./crypto";
+import { finishGoogle, googleEnabled, publicOrigin, startGoogle } from "./google";
+import { decryptSecret, encryptSecret, openExport, randomToken, sealExport, type SealedExport } from "./crypto";
+import { billsCalendar } from "../src/lib/ics";
+import type { Bill } from "../src/lib/bills";
+import { APP_NAME } from "../src/brand";
 import { createLinkToken, exchangePublicToken, plaidConfigured, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
 import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { sendBillReminders } from "./reminders";
@@ -185,6 +188,22 @@ app.post("/api/auth/delete", requireUser, async (req, res) => {
   res.json({ ok: true });
 });
 
+/*
+ * Bills calendar feed. Calendar apps fetch it without signing in, so the long random token in the link is the key:
+ * it only shows bill names, amounts and due days, and can be turned off or replaced in the app.
+ */
+app.get("/api/calendar/:file", (req, res) => {
+  const token = String(req.params.file).replace(/\.ics$/, "");
+  const ud = token.length >= 32 ? Object.values(store.data).find((d) => d.calendarToken === token) : undefined;
+  if (!ud) return res.status(404).type("text/plain").send("This calendar link was turned off or replaced in the app.");
+  const bills = ((ud.settings?.bills as Bill[] | undefined) ?? []).filter((b) => b && b.id && b.name);
+  res
+    .type("text/calendar; charset=utf-8")
+    .set("Cache-Control", "no-cache")
+    .set("Content-Disposition", `inline; filename="${APP_NAME.toLowerCase()}-bills.ics"`)
+    .send(billsCalendar(bills, { appName: APP_NAME, appUrl: publicOrigin(req) }));
+});
+
 /* Everything below is your own data only. */
 app.use("/api", (req, res, next) => (req.path === "/plaid/webhook" ? next() : requireUser(req, res, next)));
 const mine = (req: Request) => userData(req.user!.id);
@@ -287,6 +306,21 @@ app.post("/api/sync", async (req, res) => {
   const changed = (await syncAll(ud)) + (await syncSimplefin(ud).catch((e) => (console.error("[simplefin]", e), 0)));
   await afterSync(req.user!.id, ud, changed);
   res.json({ changed });
+});
+
+/* ---- Bills calendar link (Google / Apple / Outlook subscribe to it) ---- */
+const calendarUrl = (req: Request, ud: UserData) => (ud.calendarToken ? `${publicOrigin(req)}/api/calendar/${ud.calendarToken}.ics` : null);
+app.get("/api/calendar", (req, res) => res.json({ url: calendarUrl(req, mine(req)) }));
+app.post("/api/calendar", (req, res) => {
+  const ud = mine(req);
+  ud.calendarToken = randomToken(24); // makes a new link; the old one stops working
+  save(true);
+  res.json({ url: calendarUrl(req, ud) });
+});
+app.delete("/api/calendar", (req, res) => {
+  delete mine(req).calendarToken;
+  save(true);
+  res.json({ url: null });
 });
 
 /* ---- Notifications ---- */

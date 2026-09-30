@@ -1,4 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../api";
+import { APP_NAME } from "../brand";
+import { billsCalendar, calendarLinks } from "../lib/ics";
+import { STATIC } from "../useAppData";
 import { monthLabel, usd } from "../format";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { usePalette } from "../colors";
@@ -69,6 +73,8 @@ export function Bills({ data, month }: { data: AppData; month: string }) {
           </p>
         )}
       </section>
+
+      {data.bills.length > 0 && <CalendarSync bills={data.bills} />}
 
       <BillsYear rows={billsYearToDate(data.bills, data.classified, month, today)} year={month.slice(0, 4)} />
 
@@ -308,6 +314,101 @@ function BillsYear({ rows, year }: { rows: BillYearMonth[]; year: string }) {
         </ResponsiveContainer>
       </div>
       <p className="muted small">Based on the bills you track now, for months with transactions in the app.</p>
+    </section>
+  );
+}
+
+/**
+ * Put bills on Google, Apple or Outlook Calendar. With the server: a private link the calendar app subscribes to,
+ * so new or changed bills show up there by themselves. Without it: a one-time .ics file.
+ */
+function CalendarSync({ bills }: { bills: Bill[] }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [server, setServer] = useState(!STATIC);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (STATIC) return;
+    api.calendar().then((r) => setUrl(r.url)).catch(() => setServer(false));
+  }, []);
+
+  const run = async (f: () => Promise<{ url: string | null }>, done?: string) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      setUrl((await f()).url);
+      if (done) setMsg(done);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const download = () => {
+    const blob = new Blob([billsCalendar(bills, { appName: APP_NAME, appUrl: window.location.origin })], { type: "text/calendar" });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${APP_NAME.toLowerCase()}-bills.ics` });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const links = url ? calendarLinks(url, `${APP_NAME} bills`) : null;
+
+  return (
+    <section className="card">
+      <h2>Add bills to your calendar</h2>
+      {links ? (
+        <>
+          <p className="muted small">
+            Each bill shows up on its due date every month, with a reminder before it and on the day. Add or change a bill here
+            and your calendar updates by itself (Google can take up to a day to refresh; Apple and Outlook are quicker).
+          </p>
+          <div className="cal-buttons">
+            <a className="btn secondary" href={links.google} target="_blank" rel="noreferrer">Google Calendar</a>
+            <a className="btn secondary" href={links.apple}>Apple Calendar</a>
+            <a className="btn secondary" href={links.outlook} target="_blank" rel="noreferrer">Outlook.com</a>
+            <a className="btn secondary" href={links.outlookWork} target="_blank" rel="noreferrer">Outlook (work/school)</a>
+          </div>
+          <details className="small">
+            <summary>Other calendar apps, or it didn't open?</summary>
+            <p className="muted small">
+              Copy this private link and use your calendar's "Subscribe" or "Add calendar from URL" option. Anyone with the link can see
+              your bill names and amounts, so don't share it.
+            </p>
+            <div className="cal-link">
+              <input readOnly value={url!} onFocus={(e) => e.currentTarget.select()} aria-label="Calendar link" />
+              <button className="btn secondary" onClick={() => navigator.clipboard?.writeText(url!).then(() => setMsg("Link copied."))}>Copy</button>
+            </div>
+            <p className="small">
+              <button className="link" disabled={busy} onClick={() => run(api.calendarCreate, "New link made. Calendars using the old link will stop updating; add the new one.")}>
+                Make a new link
+              </button>
+              {" · "}
+              <button className="link" disabled={busy} onClick={() => run(api.calendarOff, "Calendar link turned off.")}>Turn off</button>
+              {" · "}
+              <button className="link" onClick={download}>Download a one-time copy (.ics)</button>
+            </p>
+          </details>
+          <p className="muted small">
+            Google Calendar uses its own default notification for subscribed calendars; set it under that calendar's settings in Google
+            Calendar.
+          </p>
+        </>
+      ) : server ? (
+        <>
+          <p className="muted small">
+            Get every bill on Google, Apple or Outlook Calendar, with reminders. It stays up to date as you add or change bills here.
+          </p>
+          <button className="btn" disabled={busy} onClick={() => run(api.calendarCreate)}>Set up calendar</button>
+        </>
+      ) : (
+        <>
+          <p className="muted small">
+            Download your bills as a calendar file and open it with Google, Apple or Outlook Calendar. Each bill repeats monthly on its due
+            date with a reminder. (Download again after you change bills.)
+          </p>
+          <button className="btn" onClick={download}>Download calendar file</button>
+        </>
+      )}
+      {msg && <p className="small">{msg}</p>}
     </section>
   );
 }

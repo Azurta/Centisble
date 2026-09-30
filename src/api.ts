@@ -66,5 +66,8 @@ export const api = {
   pushUnsubscribe: (endpoint: string) => post<{ ok: boolean }>("/api/push/unsubscribe", { endpoint }),
   exportData: (passphrase: string) => post<Record<string, unknown>>("/api/export", { passphrase }),
   importData: (file: unknown, passphrase: string) => post<{ banks: number; transactions: number }>("/api/import", { file, passphrase }),
+  calendar: () => call<{ url: string | null }>("/api/calendar"),
+  calendarCreate: () => post<{ url: string | null }>("/api/calendar"),
+  calendarOff: () => call<{ url: string | null }>("/api/calendar", { method: "DELETE" }),
   events: () => new EventSource("/api/events"),
 };

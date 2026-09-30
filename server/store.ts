@@ -33,6 +33,8 @@ export interface UserData {
   alertMonth?: string;
   /** Bill reminders already sent, e.g. "bill-123:2026-10:soon". */
   billReminders?: string[];
+  /** Secret part of this person's bills calendar link (/api/calendar/<token>.ics); none = calendar link off. */
+  calendarToken?: string;
 }
 
 export interface User {
