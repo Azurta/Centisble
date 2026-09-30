@@ -15,6 +15,36 @@ import type {
 
 const CARD_PAYMENT =
   /(payment\s*(-|–)?\s*thank\s*you|autopay|auto\s*pay|credit\s*c(ar)?d\s*(pmt|payment|pymt|epay)|card\s*payment|e-?payment|online\s*(pmt|payment)|mobile\s*payment|crd\s*epay|applecard\s*gsbank|amex\s*epayment|discover\s*e-?payment|capital\s*one.*(pymt|payment)|chase\s*credit\s*crd|citi\s*(card\s*)?(autopay|payment)|barclaycard\s*payment|bank\s*of\s*america\s*payment)/i;
+/** Card issuers, so a "DISCOVER E-PAYMENT" from checking can be matched to the Discover card it paid. */
+const ISSUERS: [string, RegExp][] = [
+  ["Discover", /discover/i],
+  ["Capital One", /capital\s*one|cap\s*one|capone/i],
+  ["Chase", /chase/i],
+  ["American Express", /amex|american\s*express/i],
+  ["Citi", /\bciti/i],
+  ["Bank of America", /bank\s*of\s*america|\bbofa\b/i],
+  ["Wells Fargo", /wells\s*fargo/i],
+  ["Barclays", /barclay/i],
+  ["Synchrony", /synchrony|syncb/i],
+  ["Apple Card", /apple\s*card|applecard|gs\s*bank|goldman/i],
+  ["U.S. Bank", /\bus\s*bank|u\.s\.\s*bank/i],
+  ["Navy Federal", /navy\s*federal/i],
+  ["USAA", /\busaa\b/i],
+  ["Credit One", /credit\s*one/i],
+  ["Mission Lane", /mission\s*lane/i],
+  ["Merrick", /merrick/i],
+  ["PNC", /\bpnc\b/i],
+];
+
+/** "CAPITAL ONE MOBILE PMT", "DISCOVER CRCARDPMT"…: a card issuer's name plus a payment word. */
+const ISSUER_PAYMENT = /(pmt|pymt|payment|epay|autopay|crcardpmt|bill\s*pay)/i;
+/** Same issuers also make car loans, mortgages and student loans; those aren't card payments. */
+const NOT_A_CARD = /(auto|car\s*loan|mortgage|home\s*loan|student|\bloan|\bln\b)/i;
+
+export function cardIssuer(text: string): string | undefined {
+  return ISSUERS.find(([, re]) => re.test(text))?.[0];
+}
+
 const SAVINGS_TRANSFER = /(transfer|xfer|trnsfr).*(saving|sav\b|hysa|brokerage|robinhood|fidelity|vanguard|schwab|acorns|betterment|wealthfront|roth|ira\b|401k)|(saving|acorns|betterment|wealthfront).*(transfer|deposit)/i;
 const GENERIC_TRANSFER = /(online\s*transfer|internal\s*transfer|transfer\s*(to|from)\s*(chk|checking|sav|share)|funds\s*transfer|xfer)/i;
 const INTEREST = /(interest\s*charge|purchase\s*interest|finance\s*charge|interest\s*charged|cash\s*advance\s*interest)/i;
@@ -26,7 +56,7 @@ const CATEGORY_RULES: [RegExp, CategoryId][] = [
   [/rent|apartment|property\s*mgmt|leasing|zillow\s*rent|avail\s*rent|mortgage/i, "rent"],
   [/student\s*loan|navient|nelnet|sallie\s*mae|mohela|aidvantage|great\s*lakes|affirm|klarna|afterpay|sofi\s*loan|upstart|personal\s*loan/i, "debt"],
   [/liquor|wine|spirits|brewery|brewing|beer|bevmo|total\s*wine|taproom|pub\b|tavern|saloon|\bbar\b|lounge|drizly/i, "alcohol"],
-  [/shell|chevron|exxon|mobil|bp\b|arco|valero|sunoco|speedway|circle\s*k|wawa|sheetz|76\b|gas\s*station|fuel|auto\s*loan|car\s*payment|toyota\s*financial|honda\s*financial|ally\s*auto|geico|progressive|state\s*farm|allstate|jiffy|autozone|o'?reilly|car\s*wash|parking|dmv|tesla\s*supercharger|uber\s*trip|lyft/i, "car"],
+  [/shell|chevron|exxon|mobil\b|bp\b|arco|valero|sunoco|speedway|circle\s*k|wawa|sheetz|\b76\b|gas\s*station|fuel|auto\s*loan|car\s*payment|toyota\s*financial|honda\s*financial|ally\s*auto|geico|progressive|state\s*farm|allstate|jiffy|autozone|o'?reilly|car\s*wash|parking|dmv|tesla\s*supercharger|uber\s*trip|lyft/i, "car"],
   [/netflix|spotify|hulu|disney\+?|hbo|max\.com|youtube\s*premium|apple\.com\/bill|icloud|amazon\s*prime|paramount|peacock|audible|xbox|playstation|nintendo|patreon|chatgpt|openai|adobe|dropbox|onlyfans|twitch/i, "subscriptions"],
   [/whole\s*foods|trader\s*joe|kroger|safeway|aldi|publix|wegmans|h-?e-?b\b|food\s*lion|giant|stop\s*&?\s*shop|albertsons|sprouts|winco|meijer|costco|sam'?s\s*club|grocery|market|supermarket|instacart|walmart\s*grocery/i, "groceries"],
   [/mcdonald|starbucks|chipotle|taco\s*bell|wendy|burger|subway|domino|pizza|doordash|uber\s*eats|grubhub|postmates|chick-?fil|panera|dunkin|kfc|popeyes|restaurant|cafe|coffee|grill|sushi|diner|bistro|kitchen|ticketmaster|stubhub|cinema|amc\s*theat|regal|bowling|concert|eventbrite/i, "going_out"],
@@ -166,6 +196,10 @@ export function classifyAll(
   const typeById = new Map(accounts.map((a) => [a.id, a.type]));
   const accountType = (id: string): AccountType => typeById.get(id) ?? "checking";
   const hasCreditAccount = accounts.some((a) => a.type === "credit");
+  const cardIssuers = accounts.filter((a) => a.type === "credit").map((a) => cardIssuer(a.name));
+  const linkedIssuers = new Set(cardIssuers.filter(Boolean));
+  // A card whose name doesn't say who issued it (e.g. renamed "Main card") could be the one being paid.
+  const unnamedCard = cardIssuers.some((i) => !i);
   const pairs = pairTransfers(txs, accountType);
   const byId = new Map(txs.map((t) => [t.id, t]));
 
@@ -230,10 +264,20 @@ export function classifyAll(
     }
 
     // 5. Unpaired transfer signals.
-    const looksLikeCardPayment = CARD_PAYMENT.test(text) || bd === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT";
+    const looksLikeCardPayment =
+      CARD_PAYMENT.test(text) || bd === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" || (Boolean(cardIssuer(text)) && ISSUER_PAYMENT.test(text) && !NOT_A_CARD.test(text));
     if (type === "credit" && t.amount < 0 && (looksLikeCardPayment || bp === "TRANSFER_IN" || imported === "transfer"))
       return result("transfer", "Credit card payment received — not income");
     if (t.amount > 0 && looksLikeCardPayment) {
+      // The payment names its card (e.g. "DISCOVER E-PAYMENT"): it's a transfer only if that card is linked here.
+      const issuer = cardIssuer(text);
+      if (issuer && linkedIssuers.has(issuer))
+        return result("transfer", `Payment to your ${issuer} card — the purchases were already counted on the card`);
+      if (issuer && !unnamedCard)
+        return {
+          ...result("expense", `Payment to a ${issuer} card that isn't linked — counted as spending until you link that card`, "debt"),
+          unlinkedCard: issuer,
+        };
       if (hasCreditAccount)
         return result("transfer", "Credit card payment — the purchases were already counted on the card");
       // No card linked: the payment is the only record of that spending, so count it once.

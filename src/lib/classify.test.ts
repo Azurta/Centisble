@@ -90,3 +90,31 @@ describe("classifyAll", () => {
     expect(s.interestPaid).toBeGreaterThan(0);
   });
 });
+
+describe("payments to cards that aren't linked", () => {
+  const linked: Account[] = [
+    { id: "chk", name: "Chase Total Checking ••1111", type: "checking", source: "plaid" },
+    { id: "disc", name: "Discover Discover it Card ••2222", type: "credit", source: "plaid" },
+  ];
+  it("treats a payment to the linked card as a transfer, and one to another issuer as spending", () => {
+    const c = classifyAll(
+      [
+        tx("1", "chk", "2026-05-02", "DISCOVER E-PAYMENT 4411", 250),
+        tx("2", "chk", "2026-05-03", "CAPITAL ONE MOBILE PMT", 180),
+      ],
+      linked,
+    );
+    expect(c.find((t) => t.id === "1")!.kind).toBe("transfer");
+    const cap = c.find((t) => t.id === "2")!;
+    expect(cap.kind).toBe("expense");
+    expect(cap.category).toBe("debt");
+    expect(cap.unlinkedCard).toBe("Capital One");
+  });
+  it("stays cautious when a linked card's name doesn't say its issuer", () => {
+    const c = classifyAll([tx("1", "chk", "2026-05-03", "CAPITAL ONE MOBILE PMT", 180)], [
+      ...linked,
+      { id: "cc2", name: "Main card", type: "credit", source: "manual" },
+    ]);
+    expect(c[0].kind).toBe("transfer");
+  });
+});

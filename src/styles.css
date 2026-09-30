@@ -553,3 +553,5 @@ details.more[open] > summary { margin-bottom: 12px; }
 .legal a, .unlock a:not(.btn) { color: var(--accent); }
 .legal-foot { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 12px; }
 a.brand { color: inherit; text-decoration: none; }
+.card.notice { background: var(--accent-soft); border-left: 4px solid var(--accent); }
+.card.notice h2 { margin-top: 0; }

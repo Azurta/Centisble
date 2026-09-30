@@ -13,6 +13,7 @@ import { STATIC, type AppData } from "../useAppData";
 export function Accounts({ data, focus }: { data: AppData; focus?: string }) {
   return (
     <div className="grid">
+      <UnlinkedCards data={data} />
       {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
       <AddAccount data={data} />
       <YourAccounts data={data} focus={focus} />
@@ -372,6 +373,32 @@ const TYPE_LABEL: Record<AccountType, string> = {
   loan: "Loan (student, car, personal…)",
 };
 const TYPE_SHORT: Record<AccountType, string> = { checking: "Checking", savings: "Savings", cash: "Cash", credit: "Credit card", loan: "Loan" };
+
+/** Payments from checking to cards that aren't linked: say which cards, so the person can link them. */
+function UnlinkedCards({ data }: { data: AppData }) {
+  const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const totals = new Map<string, number>();
+  for (const t of data.classified)
+    if (t.unlinkedCard && t.date >= since) totals.set(t.unlinkedCard, (totals.get(t.unlinkedCard) ?? 0) + t.amount);
+  if (!totals.size) return null;
+  const list = [...totals].sort((a, b) => b[1] - a[1]);
+  return (
+    <section className="card wide notice">
+      <h2>Link {list.length === 1 ? `your ${list[0][0]} card` : "these cards"} for accurate spending</h2>
+      <p className="small">
+        You're paying {list.map(([name, sum], i) => (
+          <span key={name}>{i ? (i === list.length - 1 ? " and " : ", ") : ""}<strong>{name}</strong> ({usd(sum)} in the last 90 days)</span>
+        ))}
+        , but {list.length === 1 ? "that card isn't" : "those cards aren't"} connected. Until {list.length === 1 ? "it is" : "they are"}, those
+        payments count as spending under Debt, because they're the only record of what was bought.
+      </p>
+      <p className="muted small">
+        Once linked, the payments stop counting and the actual purchases show up in their real categories, with any interest shown
+        separately. If one of these is a loan rather than a card, open the payment in Transactions and change its category.
+      </p>
+    </section>
+  );
+}
 
 function YourAccounts({ data, focus }: { data: AppData; focus?: string }) {
   const accounts = data.accounts.filter((a) => a.source !== "import");

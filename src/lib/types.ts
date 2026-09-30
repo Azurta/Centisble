@@ -69,6 +69,8 @@ export interface ClassifiedTransaction extends Transaction {
   /** Why the classifier chose this kind; shown in the UI so numbers are explainable. */
   reason?: string;
   accountType: AccountType;
+  /** A payment to a credit card that isn't linked (e.g. "Discover"): counted as spending until that card is linked. */
+  unlinkedCard?: string;
 }
 
 /** Built-in ids ("rent", "going_out", …) plus any category the user creates. */
