@@ -1,3 +1,4 @@
+import { CASH_DEPOSIT, CASH_WALLET_ID, CASH_WITHDRAWAL } from "./cash";
 import { matchCategoryLabel, resolveCategory, spendingCategories } from "./categories";
 import type {
   Account,
@@ -48,7 +49,7 @@ export function cardIssuer(text: string): string | undefined {
 const SAVINGS_TRANSFER = /(transfer|xfer|trnsfr).*(saving|sav\b|hysa|brokerage|robinhood|fidelity|vanguard|schwab|acorns|betterment|wealthfront|roth|ira\b|401k)|(saving|acorns|betterment|wealthfront).*(transfer|deposit)/i;
 const GENERIC_TRANSFER = /(online\s*transfer|internal\s*transfer|transfer\s*(to|from)\s*(chk|checking|sav|share)|funds\s*transfer|xfer)/i;
 const INTEREST = /(interest\s*charge|purchase\s*interest|finance\s*charge|interest\s*charged|cash\s*advance\s*interest)/i;
-const FEES = /(late\s*fee|annual\s*fee|overdraft|nsf\s*fee|returned\s*payment\s*fee|foreign\s*transaction\s*fee|cash\s*advance\s*fee|over\s*limit\s*fee)/i;
+const FEES = /(late\s*fee|atm\s*(fee|surcharge)|annual\s*fee|overdraft|nsf\s*fee|returned\s*payment\s*fee|foreign\s*transaction\s*fee|cash\s*advance\s*fee|over\s*limit\s*fee)/i;
 const REFUND = /(refund|return|reversal|credit\s*adjustment|chargeback|cashback\s*redemption|statement\s*credit)/i;
 const INCOME = /(payroll|direct\s*dep|paycheck|salary|adp\b|gusto|zelle\s*from|venmo\s*cashout|irs\s*treas|tax\s*refund|dividend|interest\s*paid|interest\s*earned)/i;
 
@@ -196,6 +197,7 @@ export function classifyAll(
   const typeById = new Map(accounts.map((a) => [a.id, a.type]));
   const accountType = (id: string): AccountType => typeById.get(id) ?? "checking";
   const hasCreditAccount = accounts.some((a) => a.type === "credit");
+  const hasWallet = accounts.some((a) => a.id === CASH_WALLET_ID);
   const cardIssuers = accounts.filter((a) => a.type === "credit").map((a) => cardIssuer(a.name));
   const linkedIssuers = new Set(cardIssuers.filter(Boolean));
   // A card whose name doesn't say who issued it (e.g. renamed "Main card") could be the one being paid.
@@ -246,6 +248,15 @@ export function classifyAll(
       return result("interest", "Interest charge — this is money lost, not spent on anything");
     if (t.amount > 0 && (FEES.test(text) || bp === "BANK_FEES"))
       return result("interest", "Bank / card fee");
+
+    // 3b. With a cash wallet, cash taken out or put in at the bank just moves between the bank and the wallet.
+    //     The spending is counted when you log what the cash bought.
+    if (hasWallet && t.accountId !== CASH_WALLET_ID && (type === "checking" || type === "savings")) {
+      if (t.amount > 0 && (CASH_WITHDRAWAL.test(text) || bd === "TRANSFER_OUT_WITHDRAWAL"))
+        return { ...result("transfer", "Cash taken out — it's in your cash wallet now"), cashMove: "to-wallet" };
+      if (t.amount < 0 && CASH_DEPOSIT.test(text))
+        return { ...result("transfer", "Cash deposited from your wallet"), cashMove: "from-wallet" };
+    }
 
     // 4. Matched transfer between two of your accounts.
     const partnerId = pairs.get(t.id);

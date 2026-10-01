@@ -4,6 +4,8 @@ import { api } from "../api";
 import { parseBudgetWorkbook, readXlsx, type SheetImport } from "../lib/budgetSheet";
 import { guessMapping, looksNegative, parseCsv, rowsToTransactions, type CsvMapping } from "../lib/csv";
 import { isDebt } from "../lib/networth";
+import { isWalletEntry, walletActivity } from "../lib/cash";
+import { allCategories, categoryInfo } from "../lib/categories";
 import { paymentFor, paymentSite, payoffPlan } from "../lib/payoff";
 import type { Account, AccountType } from "../lib/types";
 import { usd, monthLabel, pct } from "../format";
@@ -15,6 +17,7 @@ export function Accounts({ data, focus }: { data: AppData; focus?: string }) {
     <div className="grid">
       <UnlinkedCards data={data} />
       {STATIC ? <OnlineNote /> : <ConnectBank data={data} />}
+      <CashWallet data={data} />
       <AddAccount data={data} />
       <YourAccounts data={data} focus={focus} />
       <details className="card wide more">
@@ -373,6 +376,121 @@ const TYPE_LABEL: Record<AccountType, string> = {
   loan: "Loan (student, car, personal…)",
 };
 const TYPE_SHORT: Record<AccountType, string> = { checking: "Checking", savings: "Savings", cash: "Cash", credit: "Credit card", loan: "Loan" };
+
+/** Cash on hand: count it once, then log cash you get and spend. ATM withdrawals and cash deposits are added for you. */
+function CashWallet({ data }: { data: AppData }) {
+  const w = data.wallet;
+  const [mode, setMode] = useState<"in" | "out" | "count" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [what, setWhat] = useState("");
+  const [category, setCategory] = useState("misc");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const n = parseFloat(amount);
+  const ok = Number.isFinite(n) && n >= 0 && (mode === "count" || n > 0);
+  const reset = () => {
+    setMode(null);
+    setAmount("");
+    setWhat("");
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ok) return;
+    if (!w || mode === "count") (w ? data.updateAccount(w.id, { balance: n }) : data.setupWallet(n));
+    else if (mode === "out")
+      data.addCash({ date, description: what.trim() || "Cash purchase", amount: n, importedCategory: categoryInfo(category).label });
+    else data.addCash({ date, description: what.trim() || "Cash received", amount: -n, importedCategory: "Income" });
+    reset();
+  };
+  const activity = walletActivity(data.classified);
+
+  if (!w)
+    return (
+      <form className="card" onSubmit={submit}>
+        <h2>Cash</h2>
+        <p className="muted small">
+          Keep track of the cash in your wallet or at home. It counts toward what you own, cash you're paid counts as income, and what you
+          buy with cash shows up in your spending.
+        </p>
+        <label className="field">
+          How much cash do you have right now?
+          <input id="cash-start" inputMode="decimal" placeholder="$0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </label>
+        <button className="btn" disabled={!Number.isFinite(n) || n < 0}>Start tracking cash</button>
+      </form>
+    );
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Cash</h2>
+        <strong className="cash-balance">{usd(w.balance ?? 0, true)}</strong>
+      </div>
+      <p className="muted small">
+        Counted {w.balanceAsOf ? new Date(w.balanceAsOf).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}. ATM withdrawals
+        and cash deposits at your bank are added for you; log what you get and spend in cash.
+      </p>
+      {mode ? (
+        <form className="form-grid cash-form" onSubmit={submit}>
+          <label>
+            {mode === "count" ? "Cash you have now ($)" : "Amount ($)"}
+            <input id="cash-amount" autoFocus inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </label>
+          {mode !== "count" && (
+            <>
+              <label>
+                {mode === "in" ? "From" : "What for"}
+                <input id="cash-what" placeholder={mode === "in" ? "e.g. Tips, side job, gift" : "e.g. Lunch, haircut"} value={what} onChange={(e) => setWhat(e.target.value)} />
+              </label>
+              {mode === "out" && (
+                <label>
+                  Category
+                  <select id="cash-category" value={category} onChange={(e) => setCategory(e.target.value)}>
+                    {allCategories().filter((c) => c.bucket !== "none").map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </label>
+              )}
+              <label>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+            </>
+          )}
+          <div className="row-gap">
+            <button className="btn" disabled={!ok}>{mode === "in" ? "Add cash" : mode === "out" ? "Subtract cash" : "Save count"}</button>
+            <button type="button" className="link" onClick={reset}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <div className="cal-buttons">
+          <button className="btn secondary" onClick={() => setMode("in")}>+ Got cash</button>
+          <button className="btn secondary" onClick={() => setMode("out")}>− Spent cash</button>
+          <button className="btn secondary" onClick={() => { setMode("count"); setAmount(String(w.balance ?? 0)); }}>Recount</button>
+        </div>
+      )}
+      {activity.length > 0 && (
+        <ul className="list cash-list">
+          {activity.map((t) => (
+            <li key={t.id}>
+              <span>
+                {t.description}{" "}
+                <span className="muted small">
+                  {new Date(`${t.date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+                  {t.cashMove ? " · from your bank" : t.kind === "expense" ? ` · ${categoryInfo(t.category).label}` : ""}
+                </span>
+              </span>
+              <span className="row-gap">
+                <span className={(isWalletEntry(t) ? -t.amount : t.amount) > 0 ? "good" : ""}>
+                  {(isWalletEntry(t) ? -t.amount : t.amount) > 0 ? "+" : "−"}
+                  {usd(Math.abs(t.amount), true)}
+                </span>
+                {isWalletEntry(t) && (
+                  <button className="link small" aria-label={`Remove ${t.description}`} onClick={() => data.removeCashEntry(t.id)}>Remove</button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 /** Payments from checking to cards that aren't linked: say which cards, so the person can link them. */
 function UnlinkedCards({ data }: { data: AppData }) {

@@ -71,6 +71,8 @@ export interface ClassifiedTransaction extends Transaction {
   accountType: AccountType;
   /** A payment to a credit card that isn't linked (e.g. "Discover"): counted as spending until that card is linked. */
   unlinkedCard?: string;
+  /** Cash taken out at an ATM ("to-wallet") or deposited at the bank ("from-wallet"), when you track a cash wallet. */
+  cashMove?: "to-wallet" | "from-wallet";
 }
 
 /** Built-in ids ("rent", "going_out", …) plus any category the user creates. */

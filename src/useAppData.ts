@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type ServerStatus } from "./api";
 import { DEFAULT_CATEGORIES, freeColorSlot, MISC_ID, newCategoryId, setCategories, type CategoryInfo } from "./lib/categories";
 import { classifyAll, merchantKey } from "./lib/classify";
+import { CASH_WALLET_ID, walletBalance } from "./lib/cash";
 import { demoData } from "./lib/demo";
 import { loadJson, saveJson } from "./lib/storage";
 import { applyEdits } from "./lib/networth";
@@ -140,7 +141,7 @@ export function useAppData() {
     };
   }, [refresh]);
 
-  const accounts = useMemo(() => {
+  const baseAccounts = useMemo(() => {
     const m = new Map<string, Account>();
     for (const a of [...local.accounts, ...server.accounts]) m.set(a.id, a);
     return applyEdits([...m.values()], accountEdits);
@@ -153,9 +154,16 @@ export function useAppData() {
   }, [local.transactions, server.transactions]);
 
   const classified = useMemo(
-    () => classifyAll(transactions, accounts, overrides).sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, accounts, overrides, categories],
+    () => classifyAll(transactions, baseAccounts, overrides).sort((a, b) => b.date.localeCompare(a.date)),
+    [transactions, baseAccounts, overrides, categories],
   );
+
+  /* The cash wallet's balance follows what you log and what you take out / put in at the bank. */
+  const accounts = useMemo(
+    () => baseAccounts.map((a) => (a.id === CASH_WALLET_ID ? { ...a, balance: walletBalance(a, classified) } : a)),
+    [baseAccounts, classified],
+  );
+  const wallet = local.accounts.find((a) => a.id === CASH_WALLET_ID);
 
   const setCategory = (t: Transaction, category: CategoryId, rememberMerchant: boolean) =>
     setOverrides((o) => {
@@ -272,7 +280,27 @@ export function useAppData() {
   const clearDemo = () =>
     setLocal((l) => ({ accounts: l.accounts.filter((a) => a.source !== "demo"), transactions: l.transactions.filter((t) => !t.id.startsWith("demo-")) }));
 
+  /** Start tracking cash: how much you have on hand right now. */
+  const setupWallet = (amount: number) =>
+    setLocal((l) => ({
+      ...l,
+      accounts: l.accounts
+        .filter((a) => a.id !== CASH_WALLET_ID)
+        .concat({ id: CASH_WALLET_ID, name: "Cash", type: "cash", source: "manual", balance: amount, balanceAsOf: new Date().toISOString() }),
+    }));
+
+  /** Cash you spent (positive amount) or got (negative amount). */
+  const addCash = (t: Omit<Transaction, "id" | "accountId">) =>
+    setLocal((l) => ({
+      ...l,
+      transactions: [...l.transactions, { ...t, id: `cash-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, accountId: CASH_WALLET_ID }],
+    }));
+
+  const removeCashEntry = (id: string) =>
+    setLocal((l) => ({ ...l, transactions: l.transactions.filter((t) => !(t.id === id && t.accountId === CASH_WALLET_ID)) }));
+
   const addManual = (t: Omit<Transaction, "id" | "accountId">) => {
+    if (wallet) return addCash(t); // cash purchases come out of the wallet when you track one
     const account: Account = { id: "manual-cash", name: "Cash & manual entries", type: "cash", source: "import" };
     importTransactions(account, [{ ...t, id: `manual-${Date.now()}`, accountId: account.id }]);
   };
@@ -283,6 +311,7 @@ export function useAppData() {
     categories, reorderCategories, addCategory, updateCategory, removeCategory, alertAt, setAlertAt, lessonsDone, setLessonsDone, videos, setVideos,
     status, serverError, lastUpdate, refresh,
     setCategory, setKind, importTransactions, importSheetMonths, removeAccount, loadDemo, clearDemo, addManual,
+    wallet: accounts.find((a) => a.id === CASH_WALLET_ID), setupWallet, addCash, removeCashEntry,
     hasDemo: local.accounts.some((a) => a.source === "demo"),
   };
 }
