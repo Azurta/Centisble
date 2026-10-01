@@ -89,7 +89,7 @@ export function sealExport(payload: unknown, passphrase: string): SealedExport {
 }
 
 export function openExport<T>(file: SealedExport, passphrase: string): T {
-  if (file?.format !== "centsible-export") throw new Error("That isn't a Centsible export file.");
+  if (file?.format !== "centsible-export") throw new Error("That isn't an export file from this app.");
   try {
     return JSON.parse(open(file, passKey(passphrase, Buffer.from(file.salt, "base64")))) as T;
   } catch {

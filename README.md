@@ -1,10 +1,10 @@
-# Centsible — honest, automatic budgeting
+# Kernl: Budgeting & Finance — honest, automatic budgeting
 
 *(Working name — change `APP_NAME` in `src/brand.ts` and the `<title>` in `index.html`.)*
 
-Centsible tracks your spending automatically, sorts it into categories, shows where you could save, and coaches you with lessons and a Money Score.
+Kernl tracks your spending automatically, sorts it into categories, shows where you could save, and coaches you with lessons and a Money Score.
 
-It fixes the main problem with a hand-built budget sheet: **card payments counted as spending**. If you put everything on a credit card for points and then pay the card from checking, adding up every withdrawal counts each purchase twice. Centsible counts a purchase once, when you swipe the card. The card payment is marked "Not spending". Only **interest and fees** are added on top.
+It fixes the main problem with a hand-built budget sheet: **card payments counted as spending**. If you put everything on a credit card for points and then pay the card from checking, adding up every withdrawal counts each purchase twice. Kernl counts a purchase once, when you swipe the card. The card payment is marked "Not spending". Only **interest and fees** are added on top.
 
 ## Features
 
@@ -53,7 +53,7 @@ Everyone signs in with their own email and password and sees **only their own** 
 - **The first account created on a server is the owner.** When you update from the single-user version, your existing data moves into it.
 - **Invite people:** in Settings → Family & friends, either **add their email** (they then sign up at your address with Google or a password, no code needed), or **copy the invite link** and send it. Only people you add or invite can sign up. **Make a new link** stops the old one working.
 - **Continue with Google** appears on the sign-in screen once `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. In Google Cloud Console, create an OAuth client of type *Web application* with the redirect URI `https://<your site>/api/auth/google/callback`. Sign in with Apple needs a paid Apple Developer account; it's planned for later.
-- **Forgot password?** appears once `RESEND_API_KEY` and `EMAIL_FROM` are set: people get a one-hour reset link by email. Create a free account at resend.com, verify your domain there, and use an address on it for `EMAIL_FROM` (e.g. `Centsible <hello@yourdomain.com>`). Without it, the owner can set a temporary password from Settings. Sign-ins last 90 days, so closing the app or browser doesn't sign anyone out.
+- **Forgot password?** appears once `RESEND_API_KEY` and `EMAIL_FROM` are set: people get a one-hour reset link by email. Create a free account at resend.com, verify your domain there, and use an address on it for `EMAIL_FROM` (e.g. `Kernl <hello@yourdomain.com>`). Without it, the owner can set a temporary password from Settings. Sign-ins last 90 days, so closing the app or browser doesn't sign anyone out.
 - **Bills on your calendar:** the Bills tab gives each person a private link that Google, Apple or Outlook Calendar subscribes to.
 - **Forgotten password:** the owner can set a temporary one under Settings → People.
 - **Leaving:** Settings → Delete account disconnects that person's banks at Plaid and erases their data.

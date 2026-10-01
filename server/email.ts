@@ -1,6 +1,6 @@
 /**
  * Sending email (password-reset links) through Resend's API: https://resend.com (free for 3,000 emails a month).
- * Set RESEND_API_KEY and EMAIL_FROM, e.g. EMAIL_FROM="Centsible <hello@yourdomain.com>" once your domain is verified there.
+ * Set RESEND_API_KEY and EMAIL_FROM, e.g. EMAIL_FROM="Kernl <hello@yourdomain.com>" once your domain is verified there.
  */
 const API = process.env.RESEND_API_URL ?? "https://api.resend.com/emails";
 

@@ -8,7 +8,7 @@ describe("bills calendar", () => {
       { id: "bill-rent", name: "Rent", amount: 1100, dueDay: 1, remindDays: 3 },
       { id: "bill-phone", name: "Verizon, phone; family plan", amount: 64.5, dueDay: 31, remindDays: 0, autopay: true },
     ],
-    { appName: "Centsible", appUrl: "https://example.com", now },
+    { appName: "Kernl", appUrl: "https://example.com", now },
   );
   it("makes one repeating all-day event per bill", () => {
     expect(ics.startsWith("BEGIN:VCALENDAR\r\n")).toBe(true);
@@ -30,7 +30,7 @@ describe("bills calendar", () => {
     for (const line of ics.split("\r\n")) expect(line.length).toBeLessThanOrEqual(75);
   });
   it("builds subscribe links for each calendar", () => {
-    const l = calendarLinks("https://example.com/api/calendar/abc.ics", "Centsible bills");
+    const l = calendarLinks("https://example.com/api/calendar/abc.ics", "Kernl bills");
     expect(l.apple).toBe("webcal://example.com/api/calendar/abc.ics");
     expect(l.google).toContain("cid=webcal%3A%2F%2Fexample.com");
     expect(l.outlook).toContain("addfromweb?url=https%3A%2F%2Fexample.com");

@@ -28,7 +28,7 @@ services:
         sync: false
       - key: RESEND_API_KEY # optional: "Forgot password?" emails
         sync: false
-      - key: EMAIL_FROM # e.g. Centsible <hello@yourdomain.com>
+      - key: EMAIL_FROM # e.g. Kernl <hello@yourdomain.com>
         sync: false
       - key: POLL_MINUTES
         value: "30"

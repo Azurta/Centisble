@@ -8,6 +8,7 @@ import {
   type Transaction as PlaidTx,
 } from "plaid";
 import type { Account, AccountType, Transaction } from "../src/lib/types";
+import { APP_NAME } from "../src/brand";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { save, store, type Item, type UserData } from "./store";
 
@@ -37,7 +38,7 @@ const plaidErrorCode = (e: unknown) => (e as { response?: { data?: { error_code?
 export async function createLinkToken(userId: string) {
   const request = {
     user: { client_user_id: userId },
-    client_name: "Centsible",
+    client_name: APP_NAME,
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: "en",
