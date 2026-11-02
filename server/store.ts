@@ -35,6 +35,8 @@ export interface UserData {
   billReminders?: string[];
   /** Secret part of this person's bills calendar link (/api/calendar/<token>.ics); none = calendar link off. */
   calendarToken?: string;
+  /** Receipt scans used this month, for the monthly limit. */
+  receiptScans?: { month: string; count: number };
 }
 
 export interface User {

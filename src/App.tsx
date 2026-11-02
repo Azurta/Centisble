@@ -14,6 +14,7 @@ import { Insights } from "./components/Insights";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
 import { Transactions, type TxFilter } from "./components/Transactions";
+import { ReceiptScanner } from "./components/Receipts";
 import { monthLabel } from "./format";
 import { findRecurring, monthsIn, moneyScore, savingTips, summarize, summarizeMonths, trend, ytdMonths } from "./lib/analytics";
 import { loadJson, saveJson } from "./lib/storage";
@@ -175,7 +176,10 @@ function Main({ me }: { me: Me | null }) {
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
         {empty && !["accounts", "learn", "categories", "settings", "bills", "insights"].includes(tab) ? (
-          <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} />
+          <div className="stack">
+            <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} onCash={() => goTo("accounts")} />
+            <ReceiptScanner data={data} />
+          </div>
         ) : tab === "overview" ? (
           <Overview data={data} summary={periodSummary} ytd={ytdSummary} previous={previousSummary} periodLabel={periodLabel} period={period} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
         ) : tab === "transactions" ? (
@@ -203,16 +207,18 @@ function Main({ me }: { me: Me | null }) {
   );
 }
 
-function Welcome({ onDemo, onConnect }: { onDemo: () => void; onConnect: () => void }) {
+function Welcome({ onDemo, onConnect, onCash }: { onDemo: () => void; onConnect: () => void; onCash: () => void }) {
   return (
     <section className="card welcome">
-      <h1>Know where every dollar goes.</h1>
+      <h1>See where you can save, and budget better.</h1>
       <p>
-        Connect your bank and cards once. {APP_NAME} brings in every purchase by itself, sorts it into your categories, warns you before you
-        hit a limit, and shows your <strong>real</strong> spending: credit card payments aren't counted twice, only interest is.
+        Connect your bank and cards, or just snap receipts and log your cash. {APP_NAME} sorts every purchase into your categories, shows
+        where your money goes and where you could save, and warns you before you hit a limit. Your numbers are <strong>real</strong>: credit
+        card payments aren't counted twice, only interest is.
       </p>
       <div className="row">
         <button className="btn" onClick={onConnect}>Connect my bank</button>
+        <button className="btn secondary" onClick={onCash}>Track my cash</button>
         <button className="btn secondary" onClick={onDemo}>Try with demo data</button>
       </div>
     </section>

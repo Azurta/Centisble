@@ -299,8 +299,9 @@ export function useAppData() {
   const removeCashEntry = (id: string) =>
     setLocal((l) => ({ ...l, transactions: l.transactions.filter((t) => !(t.id === id && t.accountId === CASH_WALLET_ID)) }));
 
-  const addManual = (t: Omit<Transaction, "id" | "accountId">) => {
-    if (wallet) return addCash(t); // cash purchases come out of the wallet when you track one
+  /** A purchase you enter yourself. Paid in cash, it comes out of the cash wallet when you track one. */
+  const addManual = (t: Omit<Transaction, "id" | "accountId">, paidInCash = true) => {
+    if (wallet && paidInCash) return addCash(t);
     const account: Account = { id: "manual-cash", name: "Cash & manual entries", type: "cash", source: "import" };
     importTransactions(account, [{ ...t, id: `manual-${Date.now()}`, accountId: account.id }]);
   };

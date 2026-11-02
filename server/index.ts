@@ -23,6 +23,7 @@ import {
   tooManyAttempts,
 } from "./auth";
 import { emailEnabled, sendEmail } from "./email";
+import { RECEIPT_MONTHLY_LIMIT, ReceiptError, receiptsEnabled, scanReceipt } from "./receipts";
 import { finishGoogle, googleEnabled, publicOrigin, startGoogle } from "./google";
 import { decryptSecret, encryptSecret, openExport, randomToken, sealExport, type SealedExport } from "./crypto";
 import { billsCalendar } from "../src/lib/ics";
@@ -257,6 +258,7 @@ app.get("/api/status", (req, res) => {
       : { connected: false },
     plaidConnections: { used: store.plaidItemsCreated, limit: PLAID_ITEM_LIMIT },
     pushKey: vapidPublicKey(),
+    receipts: { enabled: receiptsEnabled(), ...receiptAllowance(req) },
   });
 });
 
@@ -358,6 +360,35 @@ app.delete("/api/calendar", (req, res) => {
   delete mine(req).calendarToken;
   save(true);
   res.json({ url: null });
+});
+
+/* ---- Receipt scanning ---- */
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+function receiptAllowance(req: Request) {
+  const s = mine(req).receiptScans;
+  const used = s?.month === thisMonth() ? s.count : 0;
+  return { used, limit: req.user!.role === "owner" ? null : RECEIPT_MONTHLY_LIMIT };
+}
+app.post("/api/receipts/scan", async (req, res) => {
+  if (!receiptsEnabled()) return res.status(503).json({ error: "Receipt scanning isn't turned on for this server yet." });
+  const { image, mediaType, categories, today } = req.body ?? {};
+  if (typeof image !== "string" || !image || image.length > 7_000_000) return res.status(400).json({ error: "Send one photo under 5 MB." });
+  if (!["image/jpeg", "image/png", "image/webp"].includes(mediaType)) return res.status(400).json({ error: "Use a JPEG, PNG or WebP photo." });
+  const { used, limit } = receiptAllowance(req);
+  if (limit != null && used >= limit)
+    return res.status(429).json({ error: `You've used all ${limit} receipt scans this month. They reset on the 1st.` });
+  try {
+    const labels = Array.isArray(categories) ? categories.filter((c): c is string => typeof c === "string").slice(0, 60) : [];
+    const day = typeof today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(today) ? today : new Date().toISOString().slice(0, 10);
+    const receipt = await scanReceipt({ data: image, mediaType }, labels, day);
+    mine(req).receiptScans = { month: thisMonth(), count: used + 1 };
+    save();
+    res.json({ receipt, used: used + 1, limit });
+  } catch (e) {
+    if (e instanceof ReceiptError) return res.status(e.status).json({ error: e.message });
+    console.error("[receipts]", e);
+    res.status(500).json({ error: "Receipt scanning failed. Try again." });
+  }
 });
 
 /* ---- Notifications ---- */

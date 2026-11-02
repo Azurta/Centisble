@@ -3,6 +3,7 @@ import { usd } from "../format";
 import { allCategories, categoryInfo } from "../lib/categories";
 import type { CategoryId, ClassifiedTransaction, TxKind } from "../lib/types";
 import type { AppData } from "../useAppData";
+import { ReceiptScanner } from "./Receipts";
 
 const KIND_LABEL: Record<TxKind, string> = {
   expense: "Spent",
@@ -57,6 +58,7 @@ export function Transactions({ data, months, periodLabel, filter = {} }: { data:
 
   return (
     <div className="stack">
+      <ReceiptScanner data={data} />
       <AddManual onAdd={data.addManual} />
       <section className="card">
         <div className="filters">

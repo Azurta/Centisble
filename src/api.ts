@@ -39,6 +39,18 @@ export interface ServerStatus {
   simplefin: { connected: boolean; lastSync?: string; institutions?: string[]; errors?: string[] };
   plaidConnections: { used: number; limit: number };
   pushKey: string;
+  /** Receipt scanning: off until the server has an Anthropic API key; limit is null when unlimited. */
+  receipts?: { enabled: boolean; used: number; limit: number | null };
+}
+
+export interface ScannedReceipt {
+  merchant: string;
+  date: string;
+  total: number;
+  tax: number;
+  category: string;
+  payment: "cash" | "card" | "unknown";
+  items: { name: string; amount: number }[];
 }
 
 export const api = {
@@ -73,5 +85,7 @@ export const api = {
   calendar: () => call<{ url: string | null }>("/api/calendar"),
   calendarCreate: () => post<{ url: string | null }>("/api/calendar"),
   calendarOff: () => call<{ url: string | null }>("/api/calendar", { method: "DELETE" }),
+  scanReceipt: (body: { image: string; mediaType: string; categories: string[]; today: string }) =>
+    post<{ receipt: ScannedReceipt; used: number; limit: number | null }>("/api/receipts/scan", body),
   events: () => new EventSource("/api/events"),
 };
