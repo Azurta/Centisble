@@ -37,6 +37,8 @@ export interface UserData {
   calendarToken?: string;
   /** Receipt scans used this month, for the monthly limit. */
   receiptScans?: { month: string; count: number };
+  /** On-demand bank checks used today (Plaid bills each one). */
+  bankRefreshes?: { day: string; count: number };
 }
 
 export interface User {

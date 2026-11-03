@@ -29,7 +29,7 @@ import { decryptSecret, encryptSecret, openExport, randomToken, sealExport, type
 import { billsCalendar } from "../src/lib/ics";
 import type { Bill } from "../src/lib/bills";
 import { APP_NAME } from "../src/brand";
-import { createLinkToken, exchangePublicToken, plaidConfigured, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
+import { createLinkToken, exchangePublicToken, plaidConfigured, refreshAll, refreshEnabled, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
 import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { sendBillReminders } from "./reminders";
 import { claimSetupToken, syncSimplefin } from "./simplefin";
@@ -340,11 +340,22 @@ app.delete("/api/simplefin", (req, res) => {
   res.json({ ok: true });
 });
 
+const REFRESH_DAILY = Number(process.env.PLAID_REFRESH_DAILY ?? 10);
 app.post("/api/sync", async (req, res) => {
   const ud = mine(req);
+  // "Check my bank now": ask Plaid to look at the bank immediately (limited per day; it's billed per call).
+  let refreshing = false;
+  if (refreshEnabled() && ud.items.length) {
+    const day = new Date().toISOString().slice(0, 10);
+    const used = ud.bankRefreshes?.day === day ? ud.bankRefreshes.count : 0;
+    if (req.user!.role === "owner" || used < REFRESH_DAILY) {
+      refreshing = (await refreshAll(ud)) > 0;
+      if (refreshing) { ud.bankRefreshes = { day, count: used + 1 }; save(); }
+    }
+  }
   const changed = (await syncAll(ud)) + (await syncSimplefin(ud).catch((e) => (console.error("[simplefin]", e), 0)));
   await afterSync(req.user!.id, ud, changed);
-  res.json({ changed });
+  res.json({ changed, refreshing });
 });
 
 /* ---- Bills calendar link (Google / Apple / Outlook subscribe to it) ---- */

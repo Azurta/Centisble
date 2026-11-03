@@ -109,7 +109,11 @@ function ConnectBank({ data }: { data: AppData }) {
           <SimplefinOption data={data} setMsg={setMsg} />
           {connected && (
             <div className="row">
-              <button className="btn secondary" onClick={async () => { const r = await api.sync(); setMsg(`${r.changed} updates`); data.refresh(); }}>Sync now</button>
+              <button className="btn secondary" onClick={async () => {
+                const r = await api.sync();
+                setMsg(r.refreshing ? `${r.changed} updates. Asked your bank for anything newer; it shows up here in a minute or two.` : `${r.changed} updates`);
+                data.refresh();
+              }}>Check my bank now</button>
               {data.lastUpdate && <span className="muted small">Last refreshed {data.lastUpdate.toLocaleTimeString()}</span>}
             </div>
           )}

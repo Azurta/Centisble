@@ -151,6 +151,27 @@ export async function syncItem(ud: UserData, item: Item): Promise<number> {
   return changed;
 }
 
+/** On-demand refresh is a separately billed Plaid add-on: on only when PLAID_REFRESH=1. */
+export const refreshEnabled = () => plaidConfigured && process.env.PLAID_REFRESH === "1";
+
+/**
+ * Ask Plaid to check the bank right now instead of waiting for its next scheduled check (a few times a day).
+ * New purchases then arrive through the webhook, usually within a minute or two.
+ */
+export async function refreshAll(ud: UserData): Promise<number> {
+  if (!refreshEnabled()) return 0;
+  let n = 0;
+  for (const item of ud.items) {
+    try {
+      await client.transactionsRefresh({ access_token: decryptSecret(item.accessToken) });
+      n++;
+    } catch (e) {
+      console.error(`[plaid] refresh failed for ${item.institution ?? item.itemId}:`, plaidErrorCode(e) ?? e);
+    }
+  }
+  return n;
+}
+
 export async function syncAll(ud: UserData): Promise<number> {
   let n = 0;
   for (const item of ud.items) {
