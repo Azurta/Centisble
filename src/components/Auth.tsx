@@ -102,6 +102,11 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const pwType = showPw ? "text" : "password";
+  const needsConfirm = mode === "signup" || mode === "reset";
+  const mismatch = needsConfirm && password2.length > 0 && password !== password2;
   const [code, setCode] = useState(invite);
   const [error, setError] = useState<string | null>(returnedError);
   useEffect(() => {
@@ -111,8 +116,12 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
     setError(null);
+    if (needsConfirm && password !== password2) {
+      setError("The two passwords don't match. Type the same password in both boxes.");
+      return;
+    }
+    setBusy(true);
     try {
       if (mode === "forgot") {
         const r = await api.forgot(email);
@@ -172,9 +181,15 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
               <p className="muted small">After this you'll be signed in, and signed out on your other devices.</p>
               <label className="field">
                 New password
-                <input id="auth-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <input id="auth-password" type={pwType} autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
                 <span className="muted small">At least 8 characters.</span>
               </label>
+              <label className="field">
+                Retype new password
+                <input id="auth-password2" type={pwType} autoComplete="new-password" required value={password2} onChange={(e) => setPassword2(e.target.value)} aria-invalid={mismatch} />
+                {mismatch && <span className="small bad">Doesn't match yet.</span>}
+              </label>
+              <label className="check small"><input id="auth-show" type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> Show password</label>
               {error && <p className="small bad">{error}</p>}
               <button className="btn" disabled={busy}>{busy ? "One moment…" : "Save and sign in"}</button>
               <p className="small">
@@ -213,7 +228,7 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
                 Password
                 <input
                   id="auth-password"
-                  type="password"
+                  type={pwType}
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
                   minLength={mode === "signup" ? 8 : undefined}
                   required
@@ -222,6 +237,14 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
                 />
                 {mode === "signup" && <span className="muted small">At least 8 characters.</span>}
               </label>
+              {mode === "signup" && (
+                <label className="field">
+                  Retype password
+                  <input id="auth-password2" type={pwType} autoComplete="new-password" required value={password2} onChange={(e) => setPassword2(e.target.value)} aria-invalid={mismatch} />
+                  {mismatch && <span className="small bad">Doesn't match yet.</span>}
+                </label>
+              )}
+              <label className="check small"><input id="auth-show" type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> Show password</label>
               {mode === "signup" && !firstRun && (
                 <label className="field">
                   Invite code <span className="muted">(skip this if the owner added your email)</span>
