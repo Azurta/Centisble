@@ -100,6 +100,8 @@ interface Store {
   version: 2;
   feed?: FeedPost[];
   feedback?: FeedbackEntry[];
+  /** "Forgot password" requests made while email isn't set up: the owner sets a temporary password. */
+  resetRequests?: { userId: string; at: string }[];
   users: User[];
   sessions: Session[];
   data: Record<string, UserData>;

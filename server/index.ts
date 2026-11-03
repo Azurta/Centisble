@@ -104,6 +104,7 @@ app.get("/api/auth/me", (req, res) => {
     invite: u?.role === "owner" ? store.inviteCode : undefined,
     members: u?.role === "owner" ? store.users.map(publicUser) : undefined,
     allowedEmails: u?.role === "owner" ? store.allowedEmails : undefined,
+    resetRequests: u?.role === "owner" ? store.resetRequests ?? [] : undefined,
     hasPassword: u ? Boolean(u.passwordHash) : undefined,
   });
 });
@@ -151,11 +152,23 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 /* Forgot password: always answers the same way, so it can't be used to find out who has an account. */
-app.post("/api/auth/forgot", (req, res) => {
-  if (!emailEnabled()) return res.status(400).json({ error: "Password emails aren't set up here yet. Ask the person who invited you to set a temporary password." });
+app.post("/api/auth/forgot", async (req, res) => {
   const key = `forgot:${req.ip}`;
   if (tooManyAttempts(key)) return res.status(429).json({ error: "Too many requests. Try again in 15 minutes." });
   recordFailure(key); // counts every request: at most 10 emails per 15 minutes from one place
+  if (!emailEnabled()) {
+    // No email service yet: tell the owner, who sets a temporary password. Same answer whether or not the email exists.
+    const wanted = String(req.body?.email ?? "").trim().toLowerCase();
+    const u = store.users.find((x) => x.email.toLowerCase() === wanted);
+    const recent = Date.now() - 60 * 60_000;
+    if (u && !(store.resetRequests ?? []).some((r) => r.userId === u.id && Date.parse(r.at) > recent)) {
+      store.resetRequests = [...(store.resetRequests ?? []).filter((r) => Date.parse(r.at) > Date.now() - 7 * 86_400_000), { userId: u.id, at: new Date().toISOString() }];
+      save();
+      for (const o of store.users.filter((x) => x.role === "owner" && x.id !== u.id))
+        await notify(o.id, `${u.name.split(" ")[0] || u.email} forgot their password`, "Open Settings → Family & friends to set a temporary one.", "/").catch(() => {});
+    }
+    return res.json({ ok: true, manual: true });
+  }
   const made = createPasswordReset(String(req.body?.email ?? ""));
   if (made) {
     const link = `${publicOrigin(req)}/?reset=${encodeURIComponent(made.token)}`;
@@ -211,6 +224,8 @@ app.delete("/api/auth/allowed/:email", requireUser, requireOwner, (req, res) => 
 app.post("/api/auth/members/:id/password", requireUser, requireOwner, (req, res) => {
   const err = resetMemberPassword(String(req.params.id), String(req.body?.password ?? ""));
   if (err) return res.status(400).json({ error: err });
+  store.resetRequests = (store.resetRequests ?? []).filter((r) => r.userId !== String(req.params.id));
+  save();
   res.json({ ok: true });
 });
 

@@ -200,7 +200,10 @@ function Family({ me, data }: { me: Me; data: AppData }) {
       <ul className="list">
         {me.members?.map((m) => (
           <li key={m.id}>
-            <span>{m.name} <span className="muted small">{m.email}{m.role === "owner" ? " · owner" : ""}</span></span>
+            <span>
+              {m.name} <span className="muted small">{m.email}{m.role === "owner" ? " · owner" : ""}</span>
+              {me.resetRequests?.some((r) => r.userId === m.id) && <span className="pill bad">Asked for a password reset</span>}
+            </span>
             {m.role !== "owner" && (
               <button className="link small" onClick={() => { setResetFor(resetFor === m.id ? null : m.id); setTemp(""); setMsg(null); }}>Reset password</button>
             )}

@@ -98,6 +98,7 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
   const returnedError = params.get("signin_error");
   const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "reset">(resetToken ? "reset" : firstRun || invite ? "signup" : "signin");
   const [sent, setSent] = useState(false);
+  const [manual, setManual] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -114,7 +115,8 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
     setError(null);
     try {
       if (mode === "forgot") {
-        await api.forgot(email);
+        const r = await api.forgot(email);
+        setManual(Boolean(r.manual));
         setSent(true);
         return;
       }
@@ -141,13 +143,20 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
             <>
               <h1>Reset your password</h1>
               {sent ? (
-                <p className="small">
-                  If <strong>{email}</strong> has a {APP_NAME} account, a reset link is on its way. It works for one hour; check your spam
-                  folder if you don't see it in a few minutes.
-                </p>
+                manual ? (
+                  <p className="small">
+                    If <strong>{email}</strong> has an {APP_NAME} account, we've let the person who invited you know. They'll set a temporary
+                    password and send it to you; you can change it in Settings once you're in.
+                  </p>
+                ) : (
+                  <p className="small">
+                    If <strong>{email}</strong> has an {APP_NAME} account, a reset link is on its way. It works for one hour; check your spam
+                    folder if you don't see it in a few minutes.
+                  </p>
+                )
               ) : (
                 <>
-                  <p className="muted small">Enter the email you signed up with and we'll send you a link to choose a new password.</p>
+                  <p className="muted small">{canEmail ? "Enter the email you signed up with and we'll send you a link to choose a new password." : "Enter the email you signed up with. We'll let the person who invited you know, and they'll set a temporary password for you."}</p>
                   <label className="field">Email<input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
                   {error && <p className="small bad">{error}</p>}
                   <button className="btn" disabled={busy}>{busy ? "One moment…" : "Send reset link"}</button>
@@ -235,14 +244,11 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
                   </button>
                 </p>
               )}
-              {mode === "signin" &&
-                (canEmail ? (
-                  <p className="small">
-                    <button type="button" className="link" onClick={() => { setMode("forgot"); setError(null); }}>Forgot your password?</button>
-                  </p>
-                ) : (
-                  <p className="muted small">Forgot your password? Ask the person who invited you to set a temporary one.</p>
-                ))}
+              {mode === "signin" && (
+                <p className="small">
+                  <button type="button" className="link" onClick={() => { setMode("forgot"); setError(null); }}>Forgot your password?</button>
+                </p>
+              )}
               <p className="muted small"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
             </>
           )}

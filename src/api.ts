@@ -28,6 +28,8 @@ export interface Me {
   invite?: string;
   members?: User[];
   allowedEmails?: string[];
+  /** Owner only: people who asked for a password reset while email isn't set up. */
+  resetRequests?: { userId: string; at: string }[];
   hasPassword?: boolean;
 }
 
@@ -57,7 +59,7 @@ export const api = {
   me: () => call<Me>("/api/auth/me"),
   signup: (body: { name: string; email: string; password: string; invite?: string }) => post<{ user: User }>("/api/auth/signup", body),
   login: (email: string, password: string) => post<{ user: User }>("/api/auth/login", { email, password }),
-  forgot: (email: string) => post<{ ok: boolean }>("/api/auth/forgot", { email }),
+  forgot: (email: string) => post<{ ok: boolean; manual?: boolean }>("/api/auth/forgot", { email }),
   resetPassword: (token: string, password: string) => post<{ user: User }>("/api/auth/reset", { token, password }),
   logout: () => post<{ ok: boolean }>("/api/auth/logout"),
   changePassword: (current: string, next: string) => post<{ ok: boolean }>("/api/auth/password", { current, next }),
