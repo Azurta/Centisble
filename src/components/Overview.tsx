@@ -12,10 +12,10 @@ import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
 import { Sortable } from "./Sortable";
 import { Goals, MilestonesHub } from "./Goals";
+import { Hero } from "./Hero";
 import { shortDay, statusLine } from "./Bills";
 import { billsForMonth, billTotals, tidyName } from "../lib/bills";
 import type { TxFilter } from "./Transactions";
-import { safeToSpend } from "../lib/safeToSpend";
 import { findSubscriptions, recentIncreases } from "../lib/subscriptions";
 
 /* ------------------------------------------------------------------ */
@@ -23,7 +23,6 @@ import { findSubscriptions, recentIncreases } from "../lib/subscriptions";
 /* ------------------------------------------------------------------ */
 
 export const WIDGETS = [
-  { id: "safe", label: "Safe to spend until payday", size: "half" },
   { id: "increases", label: "Price increase alerts", size: "half" },
   { id: "spending", label: "Where your money went (pie chart)", size: "half" },
   { id: "snapshot", label: "Income, expenses, what you own & owe", size: "half" },
@@ -89,7 +88,6 @@ export function Overview(props: Props) {
   const layout = resolveLayout(data.homeLayout);
 
   const render: Record<WidgetId, () => ReactNode> = {
-    safe: () => <SafeWidget {...props} />,
     increases: () => <IncreasesWidget {...props} />,
     spending: () => <SpendingWidget {...props} />,
     snapshot: () => <SnapshotWidget {...props} />,
@@ -106,6 +104,7 @@ export function Overview(props: Props) {
 
   return (
     <div className="stack">
+      <Hero data={data} nav={props.nav} />
       <div className="home-bar">
         <button className="link small" onClick={() => setCustomizing((c) => !c)} aria-expanded={customizing}>
           {customizing ? "Done" : "Customize"}
@@ -327,7 +326,7 @@ function AccountLine({ a, onClick }: { a: Account; onClick: () => void }) {
   );
 }
 
-function DebtWidget({ nw, nav }: Props) {
+export function DebtWidget({ nw, nav }: Pick<Props, "nw" | "nav">) {
   if (!nw.debts.length) return null;
   const missingApr = nw.debts.filter((d) => d.apr == null);
   return (
@@ -548,35 +547,6 @@ function BillsWidget({ data, nav }: Props) {
           <p className="muted small mt-s">{usd(t.left)} still to pay this month · {usd(t.paid)} paid</p>
         </>
       )}
-    </section>
-  );
-}
-
-function SafeWidget({ data, nav }: Props) {
-  const r = safeToSpend({ accounts: data.accounts, txs: data.classified, bills: data.bills, goals: data.goals });
-  const hasCash = data.accounts.some((a) => !a.hidden && a.source !== "import" && (a.type === "checking" || a.type === "cash") && a.balance != null);
-  if (!hasCash) return null;
-  const set = r.dueBeforePayday.reduce((s, d) => s + d.amount, 0);
-  return (
-    <section className="card safe">
-      <div className="card-head">
-        <h2>Safe to spend</h2>
-        <span className="muted small">{r.paydayFound ? `until payday, ${shortDay(r.until)}` : `until ${shortDay(r.until)}`}</span>
-      </div>
-      <div className={`safe-num ${r.safe < 0 ? "bad" : ""}`}>{usd(r.safe)}</div>
-      <p className="small">
-        {r.safe > 0 ? <>About <strong>{usd(r.perDay)}/day</strong> for the next {r.days} {r.days === 1 ? "day" : "days"}.</> : <>Bills due before payday are more than what's in checking. Move money or delay a bill.</>}
-      </p>
-      <ul className="safe-math small">
-        <li><span>In checking & cash</span><span>{usd(r.cash, true)}</span></li>
-        {r.dueBeforePayday.slice(0, 4).map((d) => (
-          <li key={d.name + d.date}><span>− {d.name} <span className="muted">{shortDay(d.date)}{d.expected ? " · usual" : ""}</span></span><span>{usd(d.amount, true)}</span></li>
-        ))}
-        {r.dueBeforePayday.length > 4 && <li><span>− {r.dueBeforePayday.length - 4} more bills</span><span>{usd(r.dueBeforePayday.slice(4).reduce((s, d) => s + d.amount, 0), true)}</span></li>}
-        {r.goals > 0 && <li><span>− Set aside for goals</span><span>{usd(r.goals, true)}</span></li>}
-      </ul>
-      {!r.paydayFound && <p className="muted small mt-s">No regular paycheck found yet, so this runs to the end of the month.</p>}
-      {!data.bills.length && !set && <button className="link small mt-s" onClick={() => nav.tab("bills")}>Add your bills so they're counted →</button>}
     </section>
   );
 }

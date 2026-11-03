@@ -100,3 +100,30 @@ function median(xs: number[]): number {
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
+
+/**
+ * Subscriptions that stopped: a steady monthly charge (2+ months) with nothing in the last 45 days.
+ * Each one counts toward "Avryo found you $___" as its yearly cost.
+ */
+export function stoppedSubscriptions(all: ClassifiedTransaction[], today = new Date()): { key: string; label: string; amount: number; lastDate: string; yearly: number }[] {
+  const cutoff = new Date(today.getTime() - 45 * 86_400_000).toISOString().slice(0, 10);
+  const since = new Date(today.getTime() - 240 * 86_400_000).toISOString().slice(0, 10);
+  const groups = new Map<string, ClassifiedTransaction[]>();
+  for (const t of all) {
+    if (t.kind !== "expense" || t.date < since) continue;
+    if (NOT_SUBSCRIPTIONS.has(t.category) || GAS.test(t.description) || LOANS.test(t.description)) continue;
+    const k = merchantKey(t);
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(t);
+  }
+  const out = [];
+  for (const [key, txs] of groups) {
+    const sorted = [...txs].sort((a, b) => a.date.localeCompare(b.date));
+    const last = sorted[sorted.length - 1];
+    const months = new Set(sorted.map((t) => monthOf(t.date)));
+    if (months.size < 2 || sorted.length > months.size + 1 || last.date >= cutoff) continue;
+    const typical = median(sorted.map((t) => t.amount));
+    if (!sorted.every((t) => Math.abs(t.amount - typical) <= Math.max(0.5, typical * 0.05))) continue;
+    out.push({ key, label: last.merchant || last.description, amount: typical, lastDate: last.date, yearly: Math.round(typical * 12 * 100) / 100 });
+  }
+  return out.sort((a, b) => b.yearly - a.yearly);
+}

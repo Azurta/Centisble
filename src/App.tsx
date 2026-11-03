@@ -15,7 +15,10 @@ import { findSubscriptions } from "./lib/subscriptions";
 import { goalPoints } from "./lib/goals";
 import { MilestonesHub } from "./components/Goals";
 import { Learn } from "./components/Learn";
-import { Overview } from "./components/Overview";
+import { DebtWidget, Overview } from "./components/Overview";
+import { Earn } from "./components/Earn";
+import { DebtList } from "./components/Accounts";
+import { BottomNav, MAIN_TABS, SpendingHeader } from "./components/Nav";
 import { Transactions, type TxFilter } from "./components/Transactions";
 import { ReceiptScanner } from "./components/Receipts";
 import { monthLabel } from "./format";
@@ -30,10 +33,12 @@ import { usd } from "./format";
 import { STATIC, useAppData } from "./useAppData";
 
 const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "transactions", label: "Transactions" },
-  { id: "insights", label: "Savings" },
+  { id: "overview", label: "Home" },
+  { id: "insights", label: "Spending" },
   { id: "categories", label: "Budgets" },
+  { id: "earn", label: "Earn" },
+  { id: "debt", label: "Debt" },
+  { id: "transactions", label: "Transactions" },
   { id: "bills", label: "Bills" },
   { id: "learn", label: "Learn" },
   { id: "accounts", label: "Accounts" },
@@ -53,6 +58,7 @@ function Main({ me }: { me: Me | null }) {
   const data = useAppData();
   useApplyAppearance(data.appearance);
   // Coming back from a bank's own login page: reopen Accounts so the connection can finish.
+  const [menu, setMenu] = useState(false);
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).has("oauth_state_id") ? "accounts" : "overview"));
   const [lessonFocus, setLessonFocus] = useState<string>();
   const months = useMemo(() => monthsIn(data.classified), [data.classified]);
@@ -159,15 +165,22 @@ function Main({ me }: { me: Me | null }) {
               </select>
             )}
             {me?.user && (
-              <button className="avatar" onClick={() => goTo("settings")} aria-label={`Signed in as ${me.user.name}. Open settings`} title={me.user.email}>
+              <button className="avatar" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-label={`Signed in as ${me.user.name}. Open menu`} title={me.user.email}>
                 {me.user.name.slice(0, 1).toUpperCase()}
               </button>
+            )}
+            {menu && (
+              <div className="more-menu" role="menu">
+                {TABS.slice(MAIN_TABS).map((t) => (
+                  <button key={t.id} role="menuitem" className={tab === t.id ? "on" : ""} onClick={() => { setMenu(false); goTo(t.id); }}>{t.label}</button>
+                ))}
+              </div>
             )}
           </div>
         </div>
         <nav className="tabs" aria-label="Sections">
-          {TABS.map((t) => (
-            <button key={t.id} className={tab === t.id ? "active" : ""} aria-current={tab === t.id ? "page" : undefined} onClick={() => goTo(t.id)}>
+          {TABS.map((t, i) => (
+            <button key={t.id} className={`${tab === t.id ? "active" : ""} ${i >= MAIN_TABS ? "more-tab" : ""}`} aria-current={tab === t.id ? "page" : undefined} onClick={() => goTo(t.id)}>
               {t.label}
             </button>
           ))}
@@ -178,7 +191,7 @@ function Main({ me }: { me: Me | null }) {
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
-        {empty && !["accounts", "learn", "categories", "settings", "bills", "insights"].includes(tab) ? (
+        {empty && !["accounts", "learn", "categories", "settings", "bills", "insights", "earn", "debt"].includes(tab) ? (
           <div className="stack">
             <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} onCash={() => goTo("accounts")} />
             <ReceiptScanner data={data} />
@@ -190,11 +203,21 @@ function Main({ me }: { me: Me | null }) {
           <Transactions key={JSON.stringify(txFilter)} data={data} months={periodMonths} periodLabel={periodLabel} filter={txFilter} />
         ) : tab === "insights" ? (
           <div className="stack">
-            <Goals data={data} />
+            <SpendingHeader summary={periodSummary} periodLabel={periodLabel} nav={nav} />
             <Insights summary={summary} tips={tips} subscriptions={subscriptions} score={score} goTo={goTo} />
           </div>
         ) : tab === "categories" ? (
-          <Categories data={data} summary={summary} history={history} statuses={statuses} />
+          <div className="stack">
+            <Categories data={data} summary={summary} history={history} statuses={statuses} />
+            <Goals data={data} />
+          </div>
+        ) : tab === "earn" ? (
+          <Earn data={data} month={month} nav={nav} />
+        ) : tab === "debt" ? (
+          <div className="stack">
+            {nw.debts.length ? <DebtWidget nw={nw} nav={nav} /> : null}
+            <DebtList data={data} />
+          </div>
         ) : tab === "bills" ? (
           <Bills data={data} month={month} />
         ) : tab === "learn" ? (
@@ -206,25 +229,34 @@ function Main({ me }: { me: Me | null }) {
         )}
       </main>
       </div>
+      <BottomNav tab={tab} onGo={goTo} />
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
 
 function Welcome({ onDemo, onConnect, onCash }: { onDemo: () => void; onConnect: () => void; onCash: () => void }) {
+  const scan = () => (document.getElementById("receipt") ?? document.getElementById("add-purchase"))?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
-    <section className="card welcome">
-      <h1>See where you can save, and budget better.</h1>
-      <p>
-        Connect your bank and cards, or just snap receipts and log your cash. {APP_NAME} sorts every purchase into your categories, shows
-        where your money goes and where you could save, and warns you before you hit a limit. Your numbers are <strong>real</strong>: credit
-        card payments aren't counted twice, only interest is.
-      </p>
-      <div className="row">
-        <button className="btn" onClick={onConnect}>Connect my bank</button>
-        <button className="btn secondary" onClick={onCash}>Track my cash</button>
-        <button className="btn secondary" onClick={onDemo}>Try with demo data</button>
+    <section className="card welcome onboard">
+      <h1>How do you want to track your money?</h1>
+      <p className="muted">You can change this anytime. Every option is free. {APP_NAME} shows where you can save, what's safe to spend, and what your debt really costs.</p>
+      <div className="onboard-options">
+        <button className="onboard-option rec" onClick={onConnect}>
+          <span className="onboard-icon" aria-hidden>🏦</span>
+          <span><strong>Connect my bank</strong> <span className="badge-good">Recommended</span><br /><span className="muted small">Purchases show up on their own. Read-only and encrypted; we never see your bank password.</span></span>
+        </button>
+        <button className="onboard-option" onClick={scan}>
+          <span className="onboard-icon" aria-hidden>📷</span>
+          <span><strong>Snap receipts</strong><br /><span className="muted small">Take a photo and {APP_NAME} fills in the store, total and category. 30 free scans a month.</span></span>
+        </button>
+        <button className="onboard-option" onClick={onCash}>
+          <span className="onboard-icon" aria-hidden>💵</span>
+          <span><strong>Track cash</strong><br /><span className="muted small">Start with what's in your wallet and spend it down.</span></span>
+        </button>
       </div>
+      <button className="link small" onClick={onDemo}>Just looking? Try it with demo data →</button>
+      <p className="muted small">No ads. We never sell your data.</p>
     </section>
   );
 }

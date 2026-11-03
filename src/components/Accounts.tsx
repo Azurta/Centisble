@@ -522,6 +522,18 @@ function UnlinkedCards({ data }: { data: AppData }) {
   );
 }
 
+/** Debts with their payoff plans, for the Debt tab. */
+export function DebtList({ data }: { data: AppData }) {
+  const debts = data.accounts.filter((a) => a.source !== "import" && isDebt(a) && !a.hidden);
+  return (
+    <section className="card">
+      <div className="card-head"><h2>Payoff plans</h2></div>
+      {!debts.length && <p className="muted small">Credit cards and loans show up here. Add student or car loans by hand in Accounts if your bank connection doesn't include them.</p>}
+      {debts.map((a, i) => <AccountEditor key={a.id} a={a} data={data} startOpen={i === 0} />)}
+    </section>
+  );
+}
+
 function YourAccounts({ data, focus }: { data: AppData; focus?: string }) {
   const accounts = data.accounts.filter((a) => a.source !== "import");
   const assets = accounts.filter((a) => !isDebt(a));

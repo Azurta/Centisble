@@ -66,7 +66,7 @@ export function ReceiptScanner({ data }: { data: AppData }) {
   };
 
   return (
-    <section className="card receipt">
+    <section className="card receipt" id="receipt">
       <div className="card-head">
         <h2>Scan a receipt</h2>
         {left != null && <span className="muted small">{left} of {info.limit} scans left this month</span>}
