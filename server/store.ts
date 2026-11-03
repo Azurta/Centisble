@@ -79,9 +79,27 @@ export interface FeedPost {
   cheers: { userId: string; emoji: string; at: string }[];
 }
 
+/** Answers from the in-app tester feedback form. */
+export interface FeedbackEntry {
+  id: string;
+  userId: string;
+  at: string;
+  /** 0-10: how likely they'd recommend Avryo to a friend. */
+  recommend?: number;
+  /** What they'd pay a month, as they chose it. */
+  wouldPay?: string;
+  confusing?: string;
+  wrongNumber?: string;
+  favorite?: string;
+  other?: string;
+  /** Screen they were on and the device, to help reproduce problems. */
+  context?: string;
+}
+
 interface Store {
   version: 2;
   feed?: FeedPost[];
+  feedback?: FeedbackEntry[];
   users: User[];
   sessions: Session[];
   data: Record<string, UserData>;

@@ -91,8 +91,23 @@ export const api = {
   feed: () => call<{ posts: FeedPost[]; people: number }>("/api/feed"),
   shareGoal: (title: string, amount: number) => post<{ post: FeedPost }>("/api/feed", { title, amount }),
   cheer: (id: string, emoji: string) => post<{ post: FeedPost }>(`/api/feed/${id}/cheer`, { emoji }),
+  sendFeedback: (body: Omit<FeedbackEntry, "id" | "userId" | "at">) => post<{ ok: boolean }>("/api/feedback", body),
+  feedbackList: () => call<{ entries: (FeedbackEntry & { name: string; email?: string })[] }>("/api/feedback"),
   unshare: (id: string) => call<{ ok: boolean }>(`/api/feed/${id}`, { method: "DELETE" }),
 };
+
+export interface FeedbackEntry {
+  id: string;
+  userId: string;
+  at: string;
+  recommend?: number;
+  wouldPay?: string;
+  confusing?: string;
+  wrongNumber?: string;
+  favorite?: string;
+  other?: string;
+  context?: string;
+}
 
 export interface FeedPost {
   id: string;

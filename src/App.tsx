@@ -17,6 +17,7 @@ import { MilestonesHub } from "./components/Goals";
 import { Learn } from "./components/Learn";
 import { DebtWidget, Overview } from "./components/Overview";
 import { Earn } from "./components/Earn";
+import { Feedback } from "./components/Feedback";
 import { DebtList } from "./components/Accounts";
 import { BottomNav, MAIN_TABS, SpendingHeader } from "./components/Nav";
 import { Transactions, type TxFilter } from "./components/Transactions";
@@ -43,6 +44,7 @@ const TABS = [
   { id: "learn", label: "Learn" },
   { id: "accounts", label: "Accounts" },
   { id: "settings", label: "Settings" },
+  { id: "feedback", label: "Send feedback" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -59,6 +61,9 @@ function Main({ me }: { me: Me | null }) {
   useApplyAppearance(data.appearance);
   // Coming back from a bank's own login page: reopen Accounts so the connection can finish.
   const [menu, setMenu] = useState(false);
+  // Remembers whether this tester already sent feedback, to stop showing the invite banner.
+  const [askedFeedback, setAskedFeedback] = useState(() => { try { return Boolean(localStorage.getItem("avryo.feedbackSent")); } catch { return false; } });
+  const [lastTab, setLastTab] = useState("overview");
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).has("oauth_state_id") ? "accounts" : "overview"));
   const [lessonFocus, setLessonFocus] = useState<string>();
   const months = useMemo(() => monthsIn(data.classified), [data.classified]);
@@ -115,6 +120,7 @@ function Main({ me }: { me: Me | null }) {
   /** `t` may carry a section to scroll to, e.g. "accounts#debts". */
   const goTo = (t: string, lesson?: string) => {
     const [tabId, hash] = t.split("#");
+    if (tabId === "feedback") setLastTab(tab);
     setTab(tabId as Tab);
     setLessonFocus(lesson);
     setAnchor(hash);
@@ -188,10 +194,13 @@ function Main({ me }: { me: Me | null }) {
       </header>
       <div className="app">
       <main>
+        {!STATIC && !askedFeedback && tab !== "feedback" && me?.user?.role !== "owner" && (
+          <p className="banner">You're testing {APP_NAME} early. <button className="link" onClick={() => goTo("feedback")}>Tell us what you think →</button></p>
+        )}
         {data.hasDemo && (
           <p className="banner">You're looking at demo data. <button className="link" onClick={() => goTo("accounts")}>Connect your own accounts →</button></p>
         )}
-        {empty && !["accounts", "learn", "categories", "settings", "bills", "insights", "earn", "debt"].includes(tab) ? (
+        {empty && !["accounts", "learn", "categories", "settings", "bills", "insights", "earn", "debt", "feedback"].includes(tab) ? (
           <div className="stack">
             <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} onCash={() => goTo("accounts")} />
             <ReceiptScanner data={data} />
@@ -222,6 +231,8 @@ function Main({ me }: { me: Me | null }) {
           <Bills data={data} month={month} />
         ) : tab === "learn" ? (
           <Learn data={data} focus={lessonFocus} />
+        ) : tab === "feedback" ? (
+          <Feedback tab={lastTab} onSent={() => setAskedFeedback(true)} />
         ) : tab === "settings" ? (
           <Settings me={me} data={data} />
         ) : (

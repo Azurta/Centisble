@@ -34,7 +34,7 @@ import { createLinkToken, exchangePublicToken, plaidConfigured, refreshAll, refr
 import { checkLimits, notify, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { sendBillReminders } from "./reminders";
 import { claimSetupToken, syncSimplefin } from "./simplefin";
-import { findItem, save, store, userData, type FeedPost, type Item, type UserData } from "./store";
+import { findItem, save, store, userData, type FeedPost, type FeedbackEntry, type Item, type UserData } from "./store";
 
 if (process.env.NODE_ENV === "production" && !process.env.DATA_KEY && !process.env.APP_TOKEN) {
   console.error("Refusing to start: set DATA_KEY (a long random value) so stored bank connections are encrypted.");
@@ -479,6 +479,36 @@ app.post("/api/plaid/webhook", async (req, res) => {
   if (!found) return;
   const changed = await syncItem(found.data, found.item).catch((e) => (console.error(e), 0));
   await afterSync(found.userId, found.data, changed);
+});
+
+/* ---- Tester feedback: anyone can send; only the owner can read ---- */
+const clip = (v: unknown, n = 2000) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : undefined);
+app.post("/api/feedback", async (req, res) => {
+  const b = req.body ?? {};
+  const rec = Number(b.recommend);
+  const entry: FeedbackEntry = {
+    id: randomUUID(),
+    userId: req.user!.id,
+    at: new Date().toISOString(),
+    recommend: Number.isInteger(rec) && rec >= 0 && rec <= 10 ? rec : undefined,
+    wouldPay: clip(b.wouldPay, 40),
+    confusing: clip(b.confusing),
+    wrongNumber: clip(b.wrongNumber),
+    favorite: clip(b.favorite),
+    other: clip(b.other),
+    context: clip(b.context, 300),
+  };
+  if (!entry.confusing && !entry.wrongNumber && !entry.favorite && !entry.other && entry.recommend == null && !entry.wouldPay)
+    return res.status(400).json({ error: "Answer at least one question." });
+  store.feedback = [...(store.feedback ?? []), entry].slice(-1000);
+  save();
+  const owner = store.users.find((u) => u.role === "owner");
+  if (owner && owner.id !== entry.userId)
+    await notify(owner.id, `New feedback from ${firstName(entry.userId)}`, (entry.confusing || entry.wrongNumber || entry.other || entry.favorite || "Open Settings to read it.").slice(0, 120), "/").catch(() => {});
+  res.json({ ok: true });
+});
+app.get("/api/feedback", requireOwner, (_req, res) => {
+  res.json({ entries: (store.feedback ?? []).slice().reverse().map((e) => ({ ...e, name: firstName(e.userId), email: store.users.find((u) => u.id === e.userId)?.email })) });
 });
 
 /* ---- Milestones hub: goals people chose to share, and cheers from the household ---- */

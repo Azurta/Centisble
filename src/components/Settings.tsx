@@ -1,3 +1,5 @@
+import { STATIC } from "../useAppData";
+import { FeedbackInbox } from "./Feedback";
 import { useEffect, useState } from "react";
 import { api, type Me } from "../api";
 import { APP_NAME } from "../brand";
@@ -9,6 +11,7 @@ import { signOut } from "./Auth";
 export function Settings({ me, data }: { me: Me | null; data: AppData }) {
   return (
     <div className="settings-grid">
+      {me?.user?.role === "owner" && !STATIC && <FeedbackInbox />}
       {me?.user?.role === "owner" && <Family me={me} data={data} />}
       <AppearanceCard data={data} />
       {me?.user && <YourAccount me={me} />}
