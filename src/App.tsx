@@ -11,12 +11,13 @@ import { Bills } from "./components/Bills";
 import { Categories } from "./components/Categories";
 import { Goals } from "./components/Goals";
 import { Insights } from "./components/Insights";
+import { findSubscriptions } from "./lib/subscriptions";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
 import { Transactions, type TxFilter } from "./components/Transactions";
 import { ReceiptScanner } from "./components/Receipts";
 import { monthLabel } from "./format";
-import { findRecurring, monthsIn, moneyScore, savingTips, summarize, summarizeMonths, trend, ytdMonths } from "./lib/analytics";
+import { monthsIn, moneyScore, savingTips, summarize, summarizeMonths, trend, ytdMonths } from "./lib/analytics";
 import { loadJson, saveJson } from "./lib/storage";
 import { categoryInfo } from "./lib/categories";
 import { limitStatuses, newlyCrossed, type LimitStatus } from "./lib/limits";
@@ -86,7 +87,7 @@ function Main({ me }: { me: Me | null }) {
   const periodLabel = period === "ytd" ? `${month.slice(0, 4)} so far` : monthLabel(month).split(" ")[0];
   const history = useMemo(() => trend(data.classified, 6), [data.classified]);
   const tips = useMemo(() => savingTips(data.classified, summary, data.budgets), [data.classified, summary, data.budgets]);
-  const recurring = useMemo(() => findRecurring(data.classified, month), [data.classified, month]);
+  const subscriptions = useMemo(() => findSubscriptions(data.classified, month), [data.classified, month]);
   const score = useMemo(() => moneyScore(data.classified, summary, data.budgets, data.lessonsDone.length), [data.classified, summary, data.budgets, data.lessonsDone]);
 
   const statuses = useMemo(() => limitStatuses(summary, data.budgets, data.alertAt), [summary, data.budgets, data.alertAt, data.categories]);
@@ -187,7 +188,7 @@ function Main({ me }: { me: Me | null }) {
         ) : tab === "insights" ? (
           <div className="stack">
             <Goals data={data} />
-            <Insights summary={summary} tips={tips} recurring={recurring} score={score} goTo={goTo} />
+            <Insights summary={summary} tips={tips} subscriptions={subscriptions} score={score} goTo={goTo} />
           </div>
         ) : tab === "categories" ? (
           <Categories data={data} summary={summary} history={history} statuses={statuses} />

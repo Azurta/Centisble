@@ -13,14 +13,18 @@ import { ScoreRing } from "./Score";
 import { Sortable } from "./Sortable";
 import { Goals } from "./Goals";
 import { shortDay, statusLine } from "./Bills";
-import { billsForMonth, billTotals } from "../lib/bills";
+import { billsForMonth, billTotals, tidyName } from "../lib/bills";
 import type { TxFilter } from "./Transactions";
+import { safeToSpend } from "../lib/safeToSpend";
+import { findSubscriptions, recentIncreases } from "../lib/subscriptions";
 
 /* ------------------------------------------------------------------ */
 /* Home screen widgets — order and visibility are yours to change      */
 /* ------------------------------------------------------------------ */
 
 export const WIDGETS = [
+  { id: "safe", label: "Safe to spend until payday", size: "half" },
+  { id: "increases", label: "Price increase alerts", size: "half" },
   { id: "spending", label: "Where your money went (pie chart)", size: "half" },
   { id: "snapshot", label: "Income, expenses, what you own & owe", size: "half" },
   { id: "limits", label: "Limits this month", size: "wide" },
@@ -82,6 +86,8 @@ export function Overview(props: Props) {
   const layout = resolveLayout(data.homeLayout);
 
   const render: Record<WidgetId, () => ReactNode> = {
+    safe: () => <SafeWidget {...props} />,
+    increases: () => <IncreasesWidget {...props} />,
     spending: () => <SpendingWidget {...props} />,
     snapshot: () => <SnapshotWidget {...props} />,
     limits: () => <LimitAlerts statuses={props.statuses} nav={props.nav} />,
@@ -538,6 +544,63 @@ function BillsWidget({ data, nav }: Props) {
           <p className="muted small mt-s">{usd(t.left)} still to pay this month · {usd(t.paid)} paid</p>
         </>
       )}
+    </section>
+  );
+}
+
+function SafeWidget({ data, nav }: Props) {
+  const r = safeToSpend({ accounts: data.accounts, txs: data.classified, bills: data.bills, goals: data.goals });
+  const hasCash = data.accounts.some((a) => !a.hidden && a.source !== "import" && (a.type === "checking" || a.type === "cash") && a.balance != null);
+  if (!hasCash) return null;
+  const set = r.dueBeforePayday.reduce((s, d) => s + d.amount, 0);
+  return (
+    <section className="card safe">
+      <div className="card-head">
+        <h2>Safe to spend</h2>
+        <span className="muted small">{r.paydayFound ? `until payday, ${shortDay(r.until)}` : `until ${shortDay(r.until)}`}</span>
+      </div>
+      <div className={`safe-num ${r.safe < 0 ? "bad" : ""}`}>{usd(r.safe)}</div>
+      <p className="small">
+        {r.safe > 0 ? <>About <strong>{usd(r.perDay)}/day</strong> for the next {r.days} {r.days === 1 ? "day" : "days"}.</> : <>Bills due before payday are more than what's in checking. Move money or delay a bill.</>}
+      </p>
+      <ul className="safe-math small">
+        <li><span>In checking & cash</span><span>{usd(r.cash, true)}</span></li>
+        {r.dueBeforePayday.slice(0, 4).map((d) => (
+          <li key={d.name + d.date}><span>− {d.name} <span className="muted">{shortDay(d.date)}{d.expected ? " · usual" : ""}</span></span><span>{usd(d.amount, true)}</span></li>
+        ))}
+        {r.dueBeforePayday.length > 4 && <li><span>− {r.dueBeforePayday.length - 4} more bills</span><span>{usd(r.dueBeforePayday.slice(4).reduce((s, d) => s + d.amount, 0), true)}</span></li>}
+        {r.goals > 0 && <li><span>− Set aside for goals</span><span>{usd(r.goals, true)}</span></li>}
+      </ul>
+      {!r.paydayFound && <p className="muted small mt-s">No regular paycheck found yet, so this runs to the end of the month.</p>}
+      {!data.bills.length && !set && <button className="link small mt-s" onClick={() => nav.tab("bills")}>Add your bills so they're counted →</button>}
+    </section>
+  );
+}
+
+function IncreasesWidget({ data, nav }: Props) {
+  const month = new Date().toISOString().slice(0, 7);
+  const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
+  const ups = recentIncreases(findSubscriptions(data.classified, month), since);
+  if (!ups.length) return null;
+  const extra = ups.reduce((s, u) => s + (u.increase!.to - u.increase!.from), 0);
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Price went up</h2>
+        <button className="link" onClick={() => nav.tab("insights")}>All subscriptions →</button>
+      </div>
+      <ul className="acct-list">
+        {ups.slice(0, 4).map((u) => (
+          <li key={u.key} className="sub-line">
+            <span className="acct-name">
+              {tidyName(u.label)}
+              <span className="acct-type bad">{usd(u.increase!.from, true)} → {usd(u.increase!.to, true)} on {shortDay(u.increase!.date)}</span>
+            </span>
+            {u.cancelUrl ? <a className="small" href={u.cancelUrl} target="_blank" rel="noreferrer">Cancel or change ↗</a> : <span className="acct-bal">+{usd(u.increase!.to - u.increase!.from, true)}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="muted small mt-s">That's {usd(extra * 12, true)} more a year. Worth a quick look.</p>
     </section>
   );
 }

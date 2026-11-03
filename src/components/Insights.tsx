@@ -1,4 +1,4 @@
-import { futureValue, type MoneyScore, type MonthSummary, type Recurring, type Tip } from "../lib/analytics";
+import { futureValue, type MoneyScore, type MonthSummary, type Tip } from "../lib/analytics";
 import { categoryInfo } from "../lib/categories";
 import { LESSONS } from "../lib/lessons";
 import type { CategoryId } from "../lib/types";
@@ -6,16 +6,18 @@ import { pct, usd } from "../format";
 import { usePalette } from "../colors";
 import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
+import type { Subscription } from "../lib/subscriptions";
+import { tidyName } from "../lib/bills";
 
 interface Props {
   summary: MonthSummary;
   tips: Tip[];
-  recurring: Recurring[];
+  subscriptions: Subscription[];
   score: MoneyScore;
   goTo: (tab: string, lesson?: string) => void;
 }
 
-export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
+export function Insights({ summary: s, tips, subscriptions, score, goTo }: Props) {
   const pal = usePalette();
   // Tips can overlap (e.g. "over budget" and "small purchases" in the same category) — take the largest per category.
   const potential: Partial<Record<CategoryId, number>> = {};
@@ -115,24 +117,40 @@ export function Insights({ summary: s, tips, recurring, score, goTo }: Props) {
         </p>
       </section>
 
-      <section className="card">
-        <h2>Recurring charges</h2>
-        {!recurring.length ? (
-          <p className="muted empty">No repeating charges found yet (needs 2+ months of data).</p>
-        ) : (
-          <>
-            <ul className="list">
-              {recurring.map((r) => (
-                <li key={r.key}>
-                  <span>{r.label} <span className="muted small">{categoryInfo(r.category).label}</span></span>
-                  <span>{usd(r.monthly, true)}/mo</span>
-                </li>
-              ))}
-            </ul>
-            <p className="muted small">Total {usd(recurring.reduce((a, r) => a + r.monthly, 0), true)}/mo · {usd(recurring.reduce((a, r) => a + r.monthly, 0) * 12)}/yr. Cancel anything you haven't used in 30 days.</p>
-          </>
-        )}
-      </section>
+      <SubscriptionList title="Subscriptions" items={subscriptions.filter((r) => r.type === "subscription")} empty="No subscriptions found yet (needs 2+ months of data)." tip="Cancel anything you haven't used in 30 days." />
+      {subscriptions.some((r) => r.type === "bill") && (
+        <SubscriptionList title="Regular bills" items={subscriptions.filter((r) => r.type === "bill")} tip="Steady bills like insurance and phone plans. Shop around once a year, and we'll flag it here if a price goes up." />
+      )}
     </div>
+  );
+}
+
+function SubscriptionList({ title, items, empty, tip }: { title: string; items: Subscription[]; empty?: string; tip: string }) {
+  const total = items.reduce((a, r) => a + r.amount, 0);
+  return (
+    <section className="card">
+      <h2>{title}</h2>
+      {!items.length ? (
+        <p className="muted empty">{empty}</p>
+      ) : (
+        <>
+          <ul className="list">
+            {items.map((r) => (
+              <li key={r.key}>
+                <span>
+                  {tidyName(r.label)} <span className="muted small">{categoryInfo(r.category).label}</span>
+                  {r.increase && <span className="pill bad">Up from {usd(r.increase.from, true)}</span>}
+                </span>
+                <span className="sub-right">
+                  {usd(r.amount, true)}/mo
+                  {r.cancelUrl && <a className="small" href={r.cancelUrl} target="_blank" rel="noreferrer">Cancel ↗</a>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">Total {usd(total, true)}/mo · {usd(total * 12)}/yr. {tip}</p>
+        </>
+      )}
+    </section>
   );
 }

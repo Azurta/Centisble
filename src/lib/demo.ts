@@ -41,7 +41,7 @@ export function demoData(today = new Date()): { accounts: Account[]; transaction
     add("demo-sav", day(y, m, 16), "Online Transfer from Checking ••1234", -100);
 
     // Everything else on the rewards card
-    add("demo-cc", day(y, m, 3), "NETFLIX.COM", 15.49);
+    add("demo-cc", day(y, m, 3), "NETFLIX.COM", i === 2 ? 17.99 : 15.49); // a price increase to spot
     add("demo-cc", day(y, m, 4), "SPOTIFY USA", 11.99);
     add("demo-cc", day(y, m, 9), "HULU 877-8244858", 17.99);
     add("demo-cc", day(y, m, 12), "VERIZON WIRELESS", 65);
