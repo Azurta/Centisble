@@ -56,7 +56,9 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Your account:</strong> first name, email address, and a scrambled (hashed) password. If you use Continue with Google, we receive your name, email and a Google account ID, not your Google password.</li>
           <li><strong>Bank data you connect:</strong> through Plaid or SimpleFIN we receive account names, types, the last digits of account numbers, balances, transactions, and for loans and credit cards, details such as interest rate, minimum payment and due date. We never see or store your bank username or password.</li>
-          <li><strong>What you enter:</strong> categories, limits, bills, goals, notes, account nicknames, appearance choices and your time zone.</li>
+          <li><strong>What you enter:</strong> purchases and cash you add by hand, categories, limits, bills, goals, notes, account nicknames, appearance choices and your time zone.</li>
+          <li><strong>Receipt photos:</strong> if you scan a receipt, the photo is sent to our AI provider to read the store, date, total and items. We keep what it reads, not the photo.</li>
+          <li><strong>Milestones you share:</strong> if you choose "Share with family" on a goal, the goal's name and amount, and your first name, are shown to the other people on your household's account, along with their cheers. You can remove a shared milestone at any time.</li>
           <li><strong>Device details for notifications:</strong> if you turn on notifications, your browser gives us a push address for that device.</li>
           <li><strong>Basic server logs:</strong> the hosting service records IP addresses and request times to keep the site running and secure.</li>
         </ul>
@@ -82,6 +84,8 @@ function PrivacyPolicy() {
           <li><strong>SimpleFIN Bridge</strong>, if you choose it, connects banks under its own terms.</li>
           <li><strong>Render</strong> hosts the app and stores its data in the United States.</li>
           <li><strong>Google</strong> handles Continue with Google if you use it, and serves the app's font.</li>
+          <li><strong>Anthropic</strong> reads receipt photos you choose to scan. It processes them to return the result to us and, under its commercial terms, does not use them to train its models.</li>
+          <li><strong>Resend</strong> sends account emails, such as password-reset links.</li>
           <li><strong>Your browser's push service</strong> (for example Apple, Google or Mozilla) delivers notifications you turn on.</li>
         </ul>
         <p>

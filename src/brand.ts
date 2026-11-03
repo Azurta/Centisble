@@ -9,4 +9,4 @@ export const OPERATOR = `the ${APP_NAME} team`;
 /** Where people reach you about privacy, support and legal questions. Fill this in before inviting people. */
 export const CONTACT_EMAIL = "";
 /** Update this date whenever the policy or terms change. */
-export const LEGAL_UPDATED = "September 29, 2026";
+export const LEGAL_UPDATED = "November 3, 2026";
