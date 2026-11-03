@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import express, { type Request, type Response } from "express";
 import path from "node:path";
@@ -30,10 +31,10 @@ import { billsCalendar } from "../src/lib/ics";
 import type { Bill } from "../src/lib/bills";
 import { APP_NAME } from "../src/brand";
 import { createLinkToken, exchangePublicToken, plaidConfigured, refreshAll, refreshEnabled, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
-import { checkLimits, subscribe, unsubscribe, vapidPublicKey } from "./push";
+import { checkLimits, notify, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { sendBillReminders } from "./reminders";
 import { claimSetupToken, syncSimplefin } from "./simplefin";
-import { findItem, save, store, userData, type Item, type UserData } from "./store";
+import { findItem, save, store, userData, type FeedPost, type Item, type UserData } from "./store";
 
 if (process.env.NODE_ENV === "production" && !process.env.DATA_KEY && !process.env.APP_TOKEN) {
   console.error("Refusing to start: set DATA_KEY (a long random value) so stored bank connections are encrypted.");
@@ -478,6 +479,67 @@ app.post("/api/plaid/webhook", async (req, res) => {
   if (!found) return;
   const changed = await syncItem(found.data, found.item).catch((e) => (console.error(e), 0));
   await afterSync(found.userId, found.data, changed);
+});
+
+/* ---- Milestones hub: goals people chose to share, and cheers from the household ---- */
+const CHEERS = ["🎉", "👏", "🔥", "💪", "❤️"];
+const firstName = (userId: string) => (store.users.find((u) => u.id === userId)?.name || "Someone").split(" ")[0];
+const feedView = (p: FeedPost) => ({
+  ...p,
+  name: firstName(p.userId),
+  cheers: p.cheers.map((c) => ({ ...c, name: firstName(c.userId) })),
+});
+const broadcastAll = (event: string, data: unknown) => store.users.forEach((u) => broadcast(u.id, event, data));
+const dollars = (n: number) => "$" + n.toLocaleString("en-US");
+
+app.get("/api/feed", (_req, res) => {
+  res.json({ posts: (store.feed ?? []).slice(-50).reverse().map(feedView), people: store.users.length });
+});
+
+app.post("/api/feed", async (req, res) => {
+  const title = String(req.body?.title ?? "").trim().slice(0, 80);
+  const amount = Number(req.body?.amount);
+  if (!title) return res.status(400).json({ error: "Missing goal name" });
+  const post: FeedPost = {
+    id: randomUUID(),
+    userId: req.user!.id,
+    kind: "goal",
+    title,
+    amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount) : undefined,
+    at: new Date().toISOString(),
+    cheers: [],
+  };
+  store.feed = [...(store.feed ?? []), post].slice(-200);
+  save();
+  broadcastAll("feed", {});
+  const who = firstName(post.userId);
+  for (const u of store.users)
+    if (u.id !== post.userId)
+      await notify(u.id, `${who} reached a goal 🎉`, `${title}${post.amount ? ` (${dollars(post.amount)})` : ""}. Send a cheer!`, "/").catch(() => {});
+  res.json({ post: feedView(post) });
+});
+
+app.post("/api/feed/:id/cheer", async (req, res) => {
+  const post = store.feed?.find((p) => p.id === req.params.id);
+  if (!post) return res.status(404).json({ error: "Not found" });
+  const emoji = CHEERS.includes(req.body?.emoji) ? req.body.emoji : "🎉";
+  const me = req.user!.id;
+  const had = post.cheers.some((c) => c.userId === me);
+  post.cheers = post.cheers.filter((c) => c.userId !== me);
+  if (!had) post.cheers.push({ userId: me, emoji, at: new Date().toISOString() });
+  save();
+  broadcastAll("feed", {});
+  if (!had && post.userId !== me) await notify(post.userId, `${firstName(me)} cheered you on ${emoji}`, `For reaching ${post.title}.`, "/").catch(() => {});
+  res.json({ post: feedView(post) });
+});
+
+app.delete("/api/feed/:id", (req, res) => {
+  const post = store.feed?.find((p) => p.id === req.params.id);
+  if (!post || (post.userId !== req.user!.id && req.user!.role !== "owner")) return res.status(404).json({ error: "Not found" });
+  store.feed = store.feed!.filter((p) => p !== post);
+  save();
+  broadcastAll("feed", {});
+  res.json({ ok: true });
 });
 
 /* ---- Background syncing for everyone ---- */

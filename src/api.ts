@@ -88,4 +88,19 @@ export const api = {
   scanReceipt: (body: { image: string; mediaType: string; categories: string[]; today: string }) =>
     post<{ receipt: ScannedReceipt; used: number; limit: number | null }>("/api/receipts/scan", body),
   events: () => new EventSource("/api/events"),
+  feed: () => call<{ posts: FeedPost[]; people: number }>("/api/feed"),
+  shareGoal: (title: string, amount: number) => post<{ post: FeedPost }>("/api/feed", { title, amount }),
+  cheer: (id: string, emoji: string) => post<{ post: FeedPost }>(`/api/feed/${id}/cheer`, { emoji }),
+  unshare: (id: string) => call<{ ok: boolean }>(`/api/feed/${id}`, { method: "DELETE" }),
 };
+
+export interface FeedPost {
+  id: string;
+  userId: string;
+  name: string;
+  kind: "goal";
+  title: string;
+  amount?: number;
+  at: string;
+  cheers: { userId: string; name: string; emoji: string; at: string }[];
+}

@@ -67,8 +67,21 @@ export interface PushSubscriptionRecord {
   createdAt: string;
 }
 
+/** A milestone shared with the household (only when the person chooses to share it). */
+export interface FeedPost {
+  id: string;
+  userId: string;
+  kind: "goal";
+  /** e.g. "Emergency fund" */
+  title: string;
+  amount?: number;
+  at: string;
+  cheers: { userId: string; emoji: string; at: string }[];
+}
+
 interface Store {
   version: 2;
+  feed?: FeedPost[];
   users: User[];
   sessions: Session[];
   data: Record<string, UserData>;

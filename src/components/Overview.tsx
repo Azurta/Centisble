@@ -11,7 +11,7 @@ import { STATIC, type AppData } from "../useAppData";
 import { Donut, toSlices } from "./Donut";
 import { ScoreRing } from "./Score";
 import { Sortable } from "./Sortable";
-import { Goals } from "./Goals";
+import { Goals, MilestonesHub } from "./Goals";
 import { shortDay, statusLine } from "./Bills";
 import { billsForMonth, billTotals, tidyName } from "../lib/bills";
 import type { TxFilter } from "./Transactions";
@@ -30,6 +30,7 @@ export const WIDGETS = [
   { id: "limits", label: "Limits this month", size: "wide" },
   { id: "bills", label: "Upcoming bills", size: "half" },
   { id: "goals", label: "Savings goals", size: "half" },
+  { id: "hub", label: "Milestones & cheers (family)", size: "half" },
   { id: "accounts", label: "Accounts & net worth", size: "half" },
   { id: "debt", label: "Debt & interest", size: "half" },
   { id: "score", label: "Money Score & top tips", size: "half" },
@@ -78,6 +79,8 @@ interface Props {
   statuses: LimitStatus[];
   nw: NetWorth;
   nav: Nav;
+  /** The signed-in person (for "you" in the milestones hub). */
+  meId?: string;
 }
 
 export function Overview(props: Props) {
@@ -93,6 +96,7 @@ export function Overview(props: Props) {
     limits: () => <LimitAlerts statuses={props.statuses} nav={props.nav} />,
     bills: () => <BillsWidget {...props} />,
     goals: () => <Goals data={data} compact />,
+    hub: () => (STATIC ? null : <MilestonesHub meId={props.meId} />),
     accounts: () => <AccountsWidget {...props} />,
     debt: () => <DebtWidget {...props} />,
     score: () => <ScoreWidget {...props} />,

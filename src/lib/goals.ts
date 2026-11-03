@@ -11,7 +11,15 @@ export interface Goal {
   accountId?: string;
   /** YYYY-MM to reach it by. */
   deadline?: string;
+  /** When it was first reached (YYYY-MM-DD): the celebration shows once. */
+  reachedAt?: string;
+  /** Shared to the household milestones hub. */
+  shared?: boolean;
 }
+
+/** Points toward the Money Score for goals reached this year (3 each, up to 9). */
+export const goalPoints = (goals: Goal[], year = new Date().getFullYear()) =>
+  Math.min(9, goals.filter((g) => g.reachedAt?.startsWith(String(year))).length * 3);
 
 export interface GoalProgress {
   goal: Goal;

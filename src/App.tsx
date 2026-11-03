@@ -12,6 +12,8 @@ import { Categories } from "./components/Categories";
 import { Goals } from "./components/Goals";
 import { Insights } from "./components/Insights";
 import { findSubscriptions } from "./lib/subscriptions";
+import { goalPoints } from "./lib/goals";
+import { MilestonesHub } from "./components/Goals";
 import { Learn } from "./components/Learn";
 import { Overview } from "./components/Overview";
 import { Transactions, type TxFilter } from "./components/Transactions";
@@ -25,7 +27,7 @@ import { isDebt, netWorth } from "./lib/networth";
 import type { Account } from "./lib/types";
 import type { Nav } from "./components/Overview";
 import { usd } from "./format";
-import { useAppData } from "./useAppData";
+import { STATIC, useAppData } from "./useAppData";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -88,7 +90,7 @@ function Main({ me }: { me: Me | null }) {
   const history = useMemo(() => trend(data.classified, 6), [data.classified]);
   const tips = useMemo(() => savingTips(data.classified, summary, data.budgets), [data.classified, summary, data.budgets]);
   const subscriptions = useMemo(() => findSubscriptions(data.classified, month), [data.classified, month]);
-  const score = useMemo(() => moneyScore(data.classified, summary, data.budgets, data.lessonsDone.length), [data.classified, summary, data.budgets, data.lessonsDone]);
+  const score = useMemo(() => moneyScore(data.classified, summary, data.budgets, data.lessonsDone.length, goalPoints(data.goals)), [data.classified, summary, data.budgets, data.lessonsDone, data.goals]);
 
   const statuses = useMemo(() => limitStatuses(summary, data.budgets, data.alertAt), [summary, data.budgets, data.alertAt, data.categories]);
 
@@ -180,9 +182,10 @@ function Main({ me }: { me: Me | null }) {
           <div className="stack">
             <Welcome onDemo={data.loadDemo} onConnect={() => goTo("accounts")} onCash={() => goTo("accounts")} />
             <ReceiptScanner data={data} />
+            {!STATIC && <MilestonesHub meId={me?.user?.id} />}
           </div>
         ) : tab === "overview" ? (
-          <Overview data={data} summary={periodSummary} ytd={ytdSummary} previous={previousSummary} periodLabel={periodLabel} period={period} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
+          <Overview data={data} meId={me?.user?.id} summary={periodSummary} ytd={ytdSummary} previous={previousSummary} periodLabel={periodLabel} period={period} history={history} score={score} tips={tips} statuses={month === thisMonth ? statuses : []} nw={nw} nav={nav} />
         ) : tab === "transactions" ? (
           <Transactions key={JSON.stringify(txFilter)} data={data} months={periodMonths} periodLabel={periodLabel} filter={txFilter} />
         ) : tab === "insights" ? (

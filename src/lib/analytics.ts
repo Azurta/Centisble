@@ -300,7 +300,7 @@ export interface MoneyScore {
   penaltyJar: number;
 }
 
-export function moneyScore(all: ClassifiedTransaction[], s: MonthSummary, budgets: Budgets, lessonsDone: number): MoneyScore {
+export function moneyScore(all: ClassifiedTransaction[], s: MonthSummary, budgets: Budgets, lessonsDone: number, goalBonus = 0): MoneyScore {
   const penalties: ScoreItem[] = [];
   const bonuses: ScoreItem[] = [];
   const monthTx = all.filter((t) => monthOf(t.date) === s.month);
@@ -328,6 +328,7 @@ export function moneyScore(all: ClassifiedTransaction[], s: MonthSummary, budget
 
   if (s.income > 0 && s.savingsRate >= 0.2) bonuses.push({ label: "Saved 20%+ of income", points: 5 });
   if (s.saved > 0) bonuses.push({ label: "Moved money into savings", points: 3 });
+  if (goalBonus) bonuses.push({ label: "Reached a savings goal this year", points: goalBonus });
   if (lessonsDone) bonuses.push({ label: `Finished ${lessonsDone} lesson${lessonsDone > 1 ? "s" : ""}`, points: Math.min(10, lessonsDone * 2) });
 
   const raw = 100 + penalties.reduce((a, p) => a + p.points, 0) + bonuses.reduce((a, b) => a + b.points, 0);
