@@ -1,5 +1,5 @@
 /* Avryo service worker: makes the app installable, opens quickly, and shows push notifications. */
-const CACHE = "avryo-v4"; // bump to clear old saved copies
+const CACHE = "avryo-v5"; // bump to clear old saved copies
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"])).catch(() => {}));

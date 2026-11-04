@@ -151,11 +151,11 @@ function Main({ me }: { me: Me | null }) {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            {/* Avryo mark: rising bars, the tallest in money green. Source art: public/icon.svg */}
+            {/* Avryo mark: the A as a peak with two money-green bars rising under it. Source art: public/icon.svg */}
             <svg className="logo" viewBox="14 14 72 72" width="24" height="24" aria-hidden>
-              <rect x="20" y="54" width="16" height="26" rx="8" fill="currentColor" />
-              <rect x="42" y="38" width="16" height="42" rx="8" fill="currentColor" />
-              <rect x="64" y="20" width="16" height="60" rx="8" fill="#4FD68A" />
+              <path d="M22 78 L50 24 L78 78" fill="none" stroke="currentColor" strokeWidth="12" strokeLinejoin="round" strokeLinecap="butt" />
+              <rect x="41.5" y="64" width="7" height="14" rx="2.5" fill="#4FD68A" />
+              <rect x="51.5" y="56" width="7" height="22" rx="2.5" fill="#4FD68A" />
             </svg>
             {APP_NAME}
           </div>

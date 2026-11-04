@@ -108,7 +108,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .topbar-inner, .tabs { max-width: 1160px; margin: 0 auto; padding-inline: 16px; }
 .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px 4px; }
 .brand { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 10px; letter-spacing: 0.01em; }
-.logo { fill: #6fa8e8; }
+.logo { fill: none; color: var(--bar-ink); }
 .month {
   background: var(--bar-2); color: var(--bar-ink); border: 1px solid rgba(255, 255, 255, 0.14);
   font-weight: 500; font-size: 14px;
