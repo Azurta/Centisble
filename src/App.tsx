@@ -151,10 +151,11 @@ function Main({ me }: { me: Me | null }) {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            <svg className="logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-              <rect x="2" y="12" width="4" height="10" rx="1" />
-              <rect x="10" y="7" width="4" height="15" rx="1" />
-              <rect x="18" y="2" width="4" height="20" rx="1" />
+            {/* Avryo mark: rising bars, the tallest in money green. Source art: public/icon.svg */}
+            <svg className="logo" viewBox="14 14 72 72" width="24" height="24" aria-hidden>
+              <rect x="20" y="54" width="16" height="26" rx="8" fill="currentColor" />
+              <rect x="42" y="38" width="16" height="42" rx="8" fill="currentColor" />
+              <rect x="64" y="20" width="16" height="60" rx="8" fill="#4FD68A" />
             </svg>
             {APP_NAME}
           </div>
