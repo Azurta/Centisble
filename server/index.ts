@@ -29,7 +29,7 @@ import { finishGoogle, googleEnabled, publicOrigin, startGoogle } from "./google
 import { decryptSecret, encryptSecret, openExport, randomToken, sealExport, type SealedExport } from "./crypto";
 import { billsCalendar } from "../src/lib/ics";
 import type { Bill } from "../src/lib/bills";
-import { APP_NAME } from "../src/brand";
+import { APP_NAME, CONTACT_EMAIL } from "../src/brand";
 import { createLinkToken, exchangePublicToken, plaidConfigured, refreshAll, refreshEnabled, removeItem, syncAll, syncItem, updateWebhook, webhookUrl } from "./plaid";
 import { checkLimits, notify, subscribe, unsubscribe, vapidPublicKey } from "./push";
 import { sendBillReminders } from "./reminders";
@@ -176,8 +176,8 @@ app.post("/api/auth/forgot", async (req, res) => {
     sendEmail(
       made.user.email,
       `Reset your ${APP_NAME} password`,
-      `${hi}\n\nUse this link to choose a new ${APP_NAME} password. It works for one hour:\n${link}\n\nIf you didn't ask for this, you can ignore this email; your password stays the same.`,
-      `<p>${hi}</p><p>Use this link to choose a new ${APP_NAME} password. It works for one hour.</p><p><a href="${link}">Choose a new password</a></p><p style="color:#667">If you didn't ask for this, you can ignore this email; your password stays the same.</p>`,
+      `${hi}\n\nUse this link to choose a new ${APP_NAME} password. It works for one hour:\n${link}\n\nIf you didn't ask for this, you can ignore this email; your password stays the same.${CONTACT_EMAIL ? `\n\nQuestions? Email ${CONTACT_EMAIL}` : ""}`,
+      `<p>${hi}</p><p>Use this link to choose a new ${APP_NAME} password. It works for one hour.</p><p><a href="${link}">Choose a new password</a></p><p style="color:#667">If you didn't ask for this, you can ignore this email; your password stays the same.</p>${CONTACT_EMAIL ? `<p style="color:#667">Questions? Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>` : ""}`,
     ).catch((e) => console.error("[email]", (e as Error).message));
   }
   res.json({ ok: true });

@@ -689,3 +689,8 @@ a.earn-card:hover { box-shadow: 0 4px 14px rgba(16,24,40,.08); }
 .fb-list p { margin: 0; font-size: 14px; }
 .fb-q { font-weight: 700; }
 @media (max-width: 520px) { .fb-stats { grid-template-columns: minmax(0, 1fr); } .nps-row button { height: 34px; font-size: 13px; } }
+
+/* Support email */
+.support-email { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-weight: 600; user-select: all; }
+.support-email a { word-break: break-all; }
+.small-btn { padding: 4px 12px; font-size: 13px; }

@@ -7,6 +7,6 @@ export const APP_TAGLINE = "Budgeting & Finance";
 /** Who runs the app. Change to your LLC's legal name once it's formed, e.g. "Avryo LLC". */
 export const OPERATOR = `the ${APP_NAME} team`;
 /** Where people reach you about privacy, support and legal questions. Fill this in before inviting people. */
-export const CONTACT_EMAIL = "";
+export const CONTACT_EMAIL = "avyrosupport@gmail.com";
 /** Update this date whenever the policy or terms change. */
 export const LEGAL_UPDATED = "November 3, 2026";

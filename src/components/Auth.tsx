@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, type Me } from "../api";
-import { APP_NAME } from "../brand";
+import { APP_NAME, CONTACT_EMAIL } from "../brand";
 import { STATIC } from "../useAppData";
 
 /** Everything this app keeps in the browser starts with this prefix. */
@@ -272,6 +272,7 @@ function AuthScreen({ firstRun, google, email: canEmail, onDone }: { firstRun: b
                   <button type="button" className="link" onClick={() => { setMode("forgot"); setError(null); }}>Forgot your password?</button>
                 </p>
               )}
+              {CONTACT_EMAIL && <p className="muted small">Trouble signing in? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p>}
               <p className="muted small"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
             </>
           )}

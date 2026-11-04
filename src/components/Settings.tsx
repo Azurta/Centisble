@@ -2,7 +2,7 @@ import { STATIC } from "../useAppData";
 import { FeedbackInbox } from "./Feedback";
 import { useEffect, useState } from "react";
 import { api, type Me } from "../api";
-import { APP_NAME } from "../brand";
+import { APP_NAME, CONTACT_EMAIL } from "../brand";
 import { canPromptInstall, disablePush, enablePush, isStandalone, onInstallAvailable, platform, promptInstall, pushState, type PushState } from "../pwa";
 import type { AppData } from "../useAppData";
 import { ACCENTS, type AccentId, type ThemeChoice } from "../appearance";
@@ -25,8 +25,9 @@ export function Settings({ me, data }: { me: Me | null; data: AppData }) {
         </section>
       )}
       <section className="card">
-        <h2>Privacy &amp; terms</h2>
-        <p className="muted small">How your data is used, and the rules for using the app.</p>
+        <h2>Help &amp; support</h2>
+        <p className="muted small">Questions, a problem, or something looks wrong? Email us and we'll get back to you, usually within a day.</p>
+        <SupportEmail />
         <p className="small"><a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms of Service</a></p>
       </section>
     </div>
@@ -367,5 +368,25 @@ function AppearanceCard({ data }: { data: AppData }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The support address as selectable text with a copy button (email links don't open on every device). */
+export function SupportEmail() {
+  const [copied, setCopied] = useState(false);
+  if (!CONTACT_EMAIL) return null;
+  return (
+    <div className="support-email">
+      <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} support`)}`}>{CONTACT_EMAIL}</a>
+      <button
+        type="button"
+        className="btn secondary small-btn"
+        onClick={async () => {
+          try { await navigator.clipboard.writeText(CONTACT_EMAIL); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* select it instead */ }
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
   );
 }

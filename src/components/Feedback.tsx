@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type FeedbackEntry } from "../api";
-import { APP_NAME } from "../brand";
+import { APP_NAME, CONTACT_EMAIL } from "../brand";
 
 const PAY = ["$0, I'd only use the free plan", "$2–3 a month", "$4–5 a month", "$6–8 a month", "More than $8 a month"];
 
@@ -81,7 +81,7 @@ export function Feedback({ tab, onSent }: { tab: string; onSent?: () => void }) 
       {state === "error" && <p className="bad small" role="alert">{error}</p>}
       <div className="row">
         <button className="btn" disabled={state === "sending"}>{state === "sending" ? "Sending…" : "Send feedback"}</button>
-        <span className="muted small">Goes only to the app's owner. Your bank data is never attached.</span>
+        <span className="muted small">Goes only to the app's owner. Your bank data is never attached.{CONTACT_EMAIL && <> Prefer email? {CONTACT_EMAIL}</>}</span>
       </div>
     </form>
   );
