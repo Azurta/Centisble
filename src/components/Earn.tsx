@@ -57,7 +57,7 @@ export function Earn({ data, month, nav }: { data: AppData; month: string; nav: 
       </section>
 
       <section className="card" id="found">
-        <div className="card-head"><h2>Avryo found you</h2><strong className="good big">{usd(found)}<span className="small muted">/yr</span></strong></div>
+        <div className="card-head"><h2>Avyro found you</h2><strong className="good big">{usd(found)}<span className="small muted">/yr</span></strong></div>
         {stopped.length ? (
           <ul className="list">
             {stopped.map((s) => (
@@ -99,7 +99,7 @@ export function Earn({ data, month, nav }: { data: AppData; month: string; nav: 
           <button className="link small" onClick={() => nav.tab("accounts")}>Log income →</button>
         </div>
       </div>
-      <p className="muted small">Estimates use your own accounts, and rates change. Avryo has no paid links here and never promotes loans or credit cards.</p>
+      <p className="muted small">Estimates use your own accounts, and rates change. Avyro has no paid links here and never promotes loans or credit cards.</p>
     </div>
   );
 }

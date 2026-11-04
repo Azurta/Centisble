@@ -84,7 +84,7 @@ export interface FeedbackEntry {
   id: string;
   userId: string;
   at: string;
-  /** 0-10: how likely they'd recommend Avryo to a friend. */
+  /** 0-10: how likely they'd recommend Avyro to a friend. */
   recommend?: number;
   /** What they'd pay a month, as they chose it. */
   wouldPay?: string;

@@ -78,7 +78,7 @@ export function demoData(today = new Date()): { accounts: Account[]; transaction
     if (i === 0) add("demo-cc", day(y, m, 28), "PURCHASE INTEREST CHARGE", Math.round((full - paid) * 0.2499 / 12 * 100) / 100);
   });
 
-  // Added after the card payments above so they don't change the statements. A subscription that was cancelled a while ago (counts toward "Avryo found you").
+  // Added after the card payments above so they don't change the statements. A subscription that was cancelled a while ago (counts toward "Avyro found you").
   add("demo-cc", day(start.getUTCFullYear(), start.getUTCMonth() - 2, 6), "PARAMOUNT+", 11.99);
   add("demo-cc", day(start.getUTCFullYear(), start.getUTCMonth() - 1, 6), "PARAMOUNT+", 11.99);
 

@@ -1,7 +1,7 @@
 /*
- * Avryo — a quiet, banking-style interface.
+ * Avyro — a quiet, banking-style interface.
  * One accent (ledger blue), cool neutrals, thin rules instead of heavy boxes,
- * Plus Jakarta Sans with tabular figures for every amount. Matches the Avryo design canvas.
+ * Plus Jakarta Sans with tabular figures for every amount. Matches the Avyro design canvas.
  */
 :root {
   color-scheme: light;
@@ -595,7 +595,7 @@ a.brand { color: inherit; text-decoration: none; }
 .cheer:hover { background: var(--surface-2); }
 .cheer.on { border-color: var(--accent); background: var(--accent-soft); }
 
-/* ---------- Avryo design: hero, bottom nav, menu, onboarding, Earn ---------- */
+/* ---------- Avyro design: hero, bottom nav, menu, onboarding, Earn ---------- */
 .card { border-color: transparent; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
 .topbar-right { position: relative; }
 .hero {

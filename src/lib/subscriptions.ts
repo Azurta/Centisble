@@ -103,7 +103,7 @@ function median(xs: number[]): number {
 
 /**
  * Subscriptions that stopped: a steady monthly charge (2+ months) with nothing in the last 45 days.
- * Each one counts toward "Avryo found you $___" as its yearly cost.
+ * Each one counts toward "Avyro found you $___" as its yearly cost.
  */
 export function stoppedSubscriptions(all: ClassifiedTransaction[], today = new Date()): { key: string; label: string; amount: number; lastDate: string; yearly: number }[] {
   const cutoff = new Date(today.getTime() - 45 * 86_400_000).toISOString().slice(0, 10);

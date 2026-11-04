@@ -1,10 +1,10 @@
 /** The app's name in one place, so renaming it later is a one-line change (plus index.html's <title>). */
-export const APP_NAME = "Avryo";
+export const APP_NAME = "Avyro";
 /** Shown after the name in app stores, the browser tab and the install prompt. */
 export const APP_TAGLINE = "Budgeting & Finance";
 
 /* Shown on the Privacy Policy and Terms pages (/privacy, /terms). */
-/** Who runs the app. Change to your LLC's legal name once it's formed, e.g. "Avryo LLC". */
+/** Who runs the app. Change to your LLC's legal name once it's formed, e.g. "Avyro LLC". */
 export const OPERATOR = `the ${APP_NAME} team`;
 /** Where people reach you about privacy, support and legal questions. Fill this in before inviting people. */
 export const CONTACT_EMAIL = "avyrosupport@gmail.com";

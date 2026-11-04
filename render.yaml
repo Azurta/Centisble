@@ -30,7 +30,7 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY # optional: receipt scanning
         sync: false
-      - key: EMAIL_FROM # e.g. Avryo <hello@yourdomain.com>
+      - key: EMAIL_FROM # e.g. Avyro <hello@yourdomain.com>
         sync: false
       - key: POLL_MINUTES
         value: "30"

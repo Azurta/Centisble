@@ -1,5 +1,5 @@
-/* Avryo service worker: makes the app installable, opens quickly, and shows push notifications. */
-const CACHE = "avryo-v6"; // bump to clear old saved copies
+/* Avyro service worker: makes the app installable, opens quickly, and shows push notifications. */
+const CACHE = "avyro-v7"; // bump to clear old saved copies
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon-192.png"])).catch(() => {}));
@@ -16,8 +16,8 @@ self.addEventListener("activate", (e) => {
  * answers with an error (e.g. for the minute Render restarts during an update). Only good pages are cached. Never /api.
  */
 const RETRY_PAGE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Avryo</title><body style="font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f2f4f7;color:#111">
-<div style="max-width:340px;text-align:center;padding:16px"><h1 style="font-size:22px">Avryo is updating</h1>
+<title>Avyro</title><body style="font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f2f4f7;color:#111">
+<div style="max-width:340px;text-align:center;padding:16px"><h1 style="font-size:22px">Avyro is updating</h1>
 <p>This usually takes about a minute. The page will reload by itself.</p>
 <p><button onclick="location.reload()" style="font:inherit;padding:10px 18px;border:0;border-radius:8px;background:#1b5fb4;color:#fff">Try again</button></p></div>
 <script>setTimeout(() => location.reload(), 15000)</script></body>`;
@@ -61,7 +61,7 @@ self.addEventListener("fetch", (e) => {
 });
 
 self.addEventListener("push", (e) => {
-  let data = { title: "Avryo", body: "", url: "/" };
+  let data = { title: "Avyro", body: "", url: "/" };
   try {
     data = { ...data, ...e.data.json() };
   } catch {
